@@ -1,0 +1,30 @@
+# R History and Session Data
+.Rhistory
+.RData
+.Ruserdata
+
+# R Project files
+.Rproj.user/
+
+# Shiny deployment config (may contain credentials)
+rsconnect/
+
+# Claude Code configuration
+.claude/
+
+# Data directory with raw/sensitive data
+datos/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*~
+*.swp
+*.swo
