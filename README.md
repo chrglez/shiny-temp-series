@@ -4,7 +4,22 @@ Aplicación Shiny para análisis de estacionalidad en series temporales, basada 
 
 ## Paquetes Necesarios
 
-### Instalación
+### Instalación Automática (Recomendado)
+
+La forma más fácil de instalar todas las dependencias es usar el script incluido:
+
+```r
+source("install_dependencies.R")
+```
+
+Este script:
+- Verifica qué paquetes ya tienes instalados
+- Instala solo los que falten
+- Te notifica cuando está listo para usar
+
+### Instalación Manual
+
+Si prefieres instalar manualmente:
 
 ```r
 # Paquetes principales
