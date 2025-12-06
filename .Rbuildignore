@@ -1,0 +1,11 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.git$
+^\.gitignore$
+^README\.md$
+^LICENSE$
+^docs/.*\.png$
+^docs/Captura.*$
+^test_layout\.R$
+^DEPLOY_INSTRUCTIONS\.md$
+^deploy_shinyapps\.R$
