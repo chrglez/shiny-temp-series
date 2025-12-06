@@ -20,7 +20,12 @@ visualizationUI <- function(id) {
         )
       ),
       card_body(
-        uiOutput(ns("dynamicPlot"))
+        shinycssloaders::withSpinner(
+          uiOutput(ns("dynamicPlot")),
+          type = 6,
+          color = "#3498db",
+          size = 0.8
+        )
       )
     )
   )
@@ -28,9 +33,11 @@ visualizationUI <- function(id) {
 
 #' Server del módulo de visualización
 #' @param id Namespace del módulo
-#' @param data reactive con los datos de la serie temporal
+#' @param data reactive con los datos de la serie temporal (limpia si hay outliers)
 #' @param analysis_results reactive con los resultados del análisis
-visualizationServer <- function(id, data, analysis_results = NULL) {
+#' @param raw_data reactive con los datos originales sin limpiar
+#' @param outlier_info reactive con información de outliers detectados
+visualizationServer <- function(id, data, analysis_results = NULL, raw_data = NULL, outlier_info = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -66,7 +73,17 @@ visualizationServer <- function(id, data, analysis_results = NULL) {
 
       if (input$plotType == "original") {
         req(data())
-        create_main_dygraph(data(), "Original Series")
+
+        # Verificar si hay outliers detectados para mostrar comparación
+        has_outliers <- !is.null(outlier_info) && !is.null(outlier_info()) &&
+                        !is.null(outlier_info()$count) && outlier_info()$count > 0
+
+        if (has_outliers && !is.null(raw_data) && !is.null(raw_data())) {
+          # Mostrar ambas series: original en gris, limpia en azul
+          create_comparison_dygraph(raw_data(), data(), "Series Comparison (Original vs Cleaned)")
+        } else {
+          create_main_dygraph(data(), "Original Series")
+        }
 
       } else if (input$plotType == "trend") {
         req(analysis_results())
@@ -135,6 +152,43 @@ create_main_dygraph <- function(data, title = "") {
     ) %>%
     dyLegend(
       show = "auto",
+      showZeroValues = TRUE,
+      hideOnMouseOut = FALSE,
+      width = 400
+    ) %>%
+    dyRangeSelector(
+      height = 40,
+      fillColor = "#ecf0f1",
+      strokeColor = "#bdc3c7"
+    ) %>%
+    dyHighlight(
+      highlightCircleSize = 5,
+      highlightSeriesBackgroundAlpha = 0.2,
+      hideOnMouseOut = TRUE
+    )
+}
+
+#' Crear gráfico de comparación (original vs limpia)
+#' @param original_data Serie temporal original con outliers
+#' @param cleaned_data Serie temporal limpia sin outliers
+#' @param title Título del gráfico
+#' @return Objeto dygraph
+create_comparison_dygraph <- function(original_data, cleaned_data, title = "") {
+  # Combinar ambas series en un data frame
+  combined <- cbind(Original = original_data, Cleaned = cleaned_data)
+
+  dygraph(combined, main = title) %>%
+    dySeries("Original", strokeWidth = 1, color = "#bdc3c7") %>%
+    dySeries("Cleaned", strokeWidth = 2, color = "#3498db") %>%
+    dyOptions(
+      fillGraph = FALSE,
+      drawPoints = FALSE,
+      gridLineColor = "#ecf0f1",
+      axisLineColor = "#95a5a6",
+      axisLabelColor = "#7f8c8d"
+    ) %>%
+    dyLegend(
+      show = "always",
       showZeroValues = TRUE,
       hideOnMouseOut = FALSE,
       width = 400

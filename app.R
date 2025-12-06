@@ -13,7 +13,7 @@ library(seastests)
 library(readxl)
 library(shinycssloaders)
 library(shinyWidgets)
-library(waiter)
+# library(waiter)  # DESHABILITADO - causaba problemas de layout
 library(nlme)
 library(tseries)
 library(KSgeneral)
@@ -37,13 +37,22 @@ ui <- page_navbar(
   # Recursos adicionales en header
   header = tags$head(
     tags$link(rel = "stylesheet", href = "styles.css"),
-    tags$script(src = "js/custom.js")
+    tags$script(src = "js/custom.js"),
+    tags$script(src = "js/debug_layout.js"),
+    # Overlay de carga
+    tags$div(id = "loading-overlay",
+      tags$div(id = "loading-content",
+        tags$div(class = "spinner"),
+        tags$h4("Analyzing Time Series"),
+        tags$p("Please wait while we process your data...")
+      )
+    )
   ),
 
-  # Sidebar con opciones
+  # Sidebar con carga de datos
   sidebar = sidebar(
-    width = 300,
-    title = "Options",
+    width = 250,
+    open = "always",
 
     # Módulo de carga
     uploadUI("upload"),
@@ -52,9 +61,11 @@ ui <- page_navbar(
 
     # Opciones de configuración
     accordion(
+      id = "configAccordion",  # ID para JavaScript
       accordion_panel(
         "Decomposition Method",
         icon = icon("project-diagram"),
+        value = "panel_decomp",  # ID del panel
         radioButtons("decompMethod", "Select method:",
           choices = list("Multiplicative" = "multiplicative",
                         "Additive" = "additive"),
@@ -64,6 +75,7 @@ ui <- page_navbar(
       accordion_panel(
         "Pre-Transformation",
         icon = icon("sliders-h"),
+        value = "panel_transform",  # ID del panel
         radioButtons("transform", "Transform:",
           choices = list("None" = "none", "Log" = "log"),
           selected = "none"
@@ -72,17 +84,21 @@ ui <- page_navbar(
       accordion_panel(
         "Outlier Detection",
         icon = icon("exclamation-triangle"),
+        value = "panel_outlier",  # ID del panel
         switchInput(
           inputId = "controlOutliers",
-          label = "Detect & Clean",
+          label = NULL,
           value = FALSE,
-          onLabel = "Yes",
-          offLabel = "No",
+          onLabel = "ON",
+          offLabel = "OFF",
           onStatus = "success",
-          offStatus = "danger"
+          offStatus = "danger",
+          size = "normal",
+          width = "auto",
+          inline = TRUE
         ),
-        tags$small(class = "text-muted",
-          "Uses tsoutliers() to detect and interpolate outliers"
+        tags$small(class = "text-muted d-block mt-1",
+          "Detect and interpolate outliers with tsoutliers()"
         )
       )
     ),
@@ -115,74 +131,14 @@ ui <- page_navbar(
     card(
       card_header("Model Information"),
       card_body(
-        uiOutput("modelInfo")
-      )
-    )
-  ),
-
-  # Panel de diagnósticos
-  nav_panel(
-    "Diagnostics",
-    icon = icon("clipboard"),
-
-    layout_columns(
-      col_widths = c(6, 6),
-
-      # Descomposición
-      card(
-        card_header("Decomposition"),
-        card_body(
-          plotOutput("decompPlot", height = "300px")
-        )
-      ),
-
-      # Seasonal subseries
-      card(
-        card_header("Seasonal Subseries"),
-        card_body(
-          plotOutput("subseriesPlot", height = "300px")
-        )
-      ),
-
-      # ACF
-      card(
-        card_header("Autocorrelation Function"),
-        card_body(
-          plotOutput("acfPlot", height = "250px")
-        )
-      ),
-
-      # PACF
-      card(
-        card_header("Partial Autocorrelation"),
-        card_body(
-          plotOutput("pacfPlot", height = "250px")
-        )
-      ),
-
-      # Q-Q Plot
-      card(
-        card_header("Q-Q Plot"),
-        card_body(
-          plotOutput("qqPlot", height = "250px")
-        )
-      ),
-
-      # Histogram
-      card(
-        card_header("Residuals Histogram"),
-        card_body(
-          plotOutput("histPlot", height = "250px")
+        shinycssloaders::withSpinner(
+          uiOutput("modelInfo"),
+          type = 6,
+          color = "#3498db",
+          size = 0.8
         )
       )
     )
-  ),
-
-  # Panel de comparación
-  nav_panel(
-    "Comparison",
-    icon = icon("balance-scale"),
-    comparisonUI("comparison")
   ),
 
   # Panel de descarga
@@ -227,11 +183,11 @@ ui <- page_navbar(
 # Server
 server <- function(input, output, session) {
 
-  # Waiter
-  waiter <- Waiter$new(
-    html = spin_folding_cube(),
-    color = "#3498db"
-  )
+  # Waiter (DESHABILITADO - causaba problemas de layout)
+  # waiter <- Waiter$new(
+  #   html = spin_folding_cube(),
+  #   color = "#3498db"
+  # )
 
   # Datos cargados (originales)
   raw_data <- uploadServer("upload")
@@ -291,9 +247,14 @@ server <- function(input, output, session) {
   observeEvent(input$runAnalysis, {
     req(data())
 
-    waiter$show()
+    # waiter$show()
 
     tryCatch({
+      # Timestamp de inicio
+      start_time <- Sys.time()
+      cat("\n========================================\n")
+      cat("🔄 Starting analysis at:", format(start_time), "\n")
+      
       # Realizar análisis
       ts_data <- data()
       freq <- frequency(ts_data)
@@ -302,39 +263,68 @@ server <- function(input, output, session) {
       if (input$transform == "log") {
         ts_data <- log(ts_data)
       }
+      
+      cat("Step 1: Transform completed\n")
 
-      # Tests de estacionalidad básicos
-      tests <- run_seasonality_tests(ts_data)
-
-      # Descomposición (aditiva o multiplicativa según selector)
+      # Descomposición (aditiva o multiplicativa según selector) - RÁPIDO
       decomp_type <- input$decompMethod
+      t1 <- Sys.time()
       decomp <- decompose(ts_data, type = decomp_type)
+      cat("Step 2: Decomposition took", difftime(Sys.time(), t1, units="secs"), "seconds\n")
 
-      # Pre-calcular tests de estacionalidad para la vista "Seasonality Tests"
-      # Modelo ARIMA
+      # ARIMA ULTRA-RÁPIDO (reducido drásticamente)
+      t2 <- Sys.time()
       arima_model <- tryCatch({
-        forecast::auto.arima(ts_data, seasonal = TRUE, stepwise = TRUE, approximation = TRUE)
+        forecast::auto.arima(ts_data, 
+                            seasonal = TRUE, 
+                            stepwise = TRUE,
+                            approximation = TRUE,
+                            max.p = 2,      # MUY reducido (era 3)
+                            max.q = 2,      # MUY reducido (era 3)
+                            max.P = 1,      # MUY reducido (era 2)
+                            max.Q = 1,      # MUY reducido (era 2)
+                            max.d = 1,
+                            max.D = 1,
+                            max.order = 4,  # Límite total (p+q+P+Q)
+                            allowdrift = FALSE,
+                            allowmean = FALSE,  # Más rápido
+                            ic = "aicc",
+                            trace = FALSE)
       }, error = function(e) NULL)
+      cat("Step 3: ARIMA took", difftime(Sys.time(), t2, units="secs"), "seconds\n")
 
-      # F-Test on seasonal dummies
+      # F-Test on seasonal dummies - RÁPIDO
+      t3 <- Sys.time()
       seasdum_test <- tryCatch({
         seastests::seasdum(ts_data)
       }, error = function(e) NULL)
+      cat("Step 4: Seasdum took", difftime(Sys.time(), t3, units="secs"), "seconds\n")
 
-      # Welch test
+      # Welch test - RÁPIDO
+      t4 <- Sys.time()
       welch_test <- tryCatch({
         seastests::welch(ts_data)
       }, error = function(e) NULL)
+      cat("Step 5: Welch took", difftime(Sys.time(), t4, units="secs"), "seconds\n")
 
-      # Kruskal-Wallis
+      # Kruskal-Wallis - RÁPIDO
+      t5 <- Sys.time()
       kw_test <- tryCatch({
         seastests::kw(ts_data)
       }, error = function(e) NULL)
+      cat("Step 6: KW took", difftime(Sys.time(), t5, units="secs"), "seconds\n")
 
-      # Análisis autoregresivo (con Fisher MC reducido a 500)
+      # Análisis autoregresivo (EXTREMADAMENTE OPTIMIZADO)
+      # Fisher MC = 10 (mínimo absoluto, era 25)
+      # max_p = 2 (muy reducido, era 4)
+      t6 <- Sys.time()
       autoreg_results <- tryCatch({
-        seasonality_autoreg(ts_data, freq = freq, max_p = 13, fisher_mc = 500)
+        seasonality_autoreg(ts_data, freq = freq, max_p = 2, fisher_mc = 10)
       }, error = function(e) NULL)
+      cat("Step 7: Autoreg took", difftime(Sys.time(), t6, units="secs"), "seconds\n")
+      
+      # Tests básicos - ELIMINADO run_seasonality_tests que duplicaba trabajo
+      tests <- NULL
 
       # Guardar resultados
       analysis_results(list(
@@ -349,12 +339,18 @@ server <- function(input, output, session) {
         kw_test = kw_test,
         autoreg_results = autoreg_results
       ))
+      
+      # Timestamp de finalización
+      end_time <- Sys.time()
+      elapsed <- difftime(end_time, start_time, units = "secs")
+      cat("✅ Analysis completed in:", round(elapsed, 2), "seconds\n")
+      cat("========================================\n\n")
 
     }, error = function(e) {
       showNotification(paste("Error:", e$message), type = "error")
     })
 
-    waiter$hide()
+    # waiter$hide()
   })
 
   # Selector de resultados (aparece después de Run Analysis)
@@ -362,7 +358,16 @@ server <- function(input, output, session) {
     req(analysis_results())
 
     tagList(
-      h6("View Results", class = "text-muted"),
+      # Título destacado con animación
+      tags$div(
+        class = "alert alert-success fade-in",
+        style = "padding: 0.75rem; margin-bottom: 1rem;",
+        tags$strong(icon("check-circle"), " Analysis Complete"),
+        tags$br(),
+        tags$small("Select a view below")
+      ),
+      
+      h6("View Results", class = "fw-bold", style = "color: #27ae60;"),
       prettyRadioButtons(
         inputId = "resultType",
         label = NULL,
@@ -372,7 +377,7 @@ server <- function(input, output, session) {
           "Distribution Comparison" = "distribution"
         ),
         selected = "decomposition",
-        status = "primary",
+        status = "success",  # Cambiado de primary a success
         shape = "curve",
         animation = "smooth",
         icon = icon("check")
@@ -380,11 +385,11 @@ server <- function(input, output, session) {
     )
   })
 
-  # Visualización
-  visualizationServer("viz", data, analysis_results)
+  # Visualización (pasamos raw_data y outlier_info para mostrar comparación)
+  visualizationServer("viz", data, analysis_results, raw_data, outlier_info)
 
-  # Comparación
-  comparisonServer("comparison", data)
+  # Comparación (OCULTO)
+  # comparisonServer("comparison", data)
 
   # Model Information (contenido dinámico según selector)
   output$modelInfo <- renderUI({
@@ -655,22 +660,42 @@ server <- function(input, output, session) {
       # Contrastes de distribución
       ts_data <- analysis_results()$ts_data
       decomp <- analysis_results()$decomposition
+      decomp_type <- analysis_results()$decomp_type
       freq <- frequency(ts_data)
 
       # Obtener componente estacional normalizado
       seasonal_vals <- as.vector(decomp$seasonal)[1:freq]
       # Normalizar dividiendo por freq (como en el script: Vari.estacional/12)
       seasonal_normalized <- seasonal_vals / freq
+      
+      # Generar valor por defecto según modelo y frecuencia
+      default_dist <- if (decomp_type == "multiplicative") {
+        # Multiplicativo: todos 1 (sin efecto estacional)
+        paste(rep(1, freq), collapse = ", ")
+      } else {
+        # Aditivo: ceros (sin efecto estacional)
+        paste(rep(0, freq), collapse = ", ")
+      }
 
       tagList(
         h5("Distribution Comparison"),
         p("Compare seasonal component with a theoretical distribution."),
+        
+        tags$div(class = "alert alert-info", style = "font-size: 0.9rem;",
+          tags$strong("Default values: "),
+          if (decomp_type == "multiplicative") {
+            paste0("No seasonal effect (", freq, " ones - multiplicative identity)")
+          } else {
+            paste0("No seasonal effect (", freq, " zeros - additive identity)")
+          }
+        ),
 
         # Input para distribución teórica
         textAreaInput(
           "theoreticalDist",
           "Theoretical Distribution (comma-separated values):",
-          placeholder = "e.g., 0.0805, 0.0847, 0.0890, 0.0763, 0.0763, 0.0805, 0.0805, 0.0890, 0.0805, 0.0847, 0.0890, 0.0890",
+          value = default_dist,  # Valor por defecto
+          placeholder = "e.g., 0.0833, 0.0833, ...",
           rows = 3,
           width = "100%"
         ),
@@ -693,40 +718,40 @@ server <- function(input, output, session) {
     }
   })
 
-  # Gráficos de diagnóstico
-  output$decompPlot <- renderPlot({
-    req(analysis_results())
-    plot(analysis_results()$decomposition)
-  })
-
-  output$subseriesPlot <- renderPlot({
-    req(analysis_results())
-    monthplot(analysis_results()$ts_data)
-  })
-
-  output$acfPlot <- renderPlot({
-    req(analysis_results())
-    acf(analysis_results()$ts_data, main = "ACF")
-  })
-
-  output$pacfPlot <- renderPlot({
-    req(analysis_results())
-    pacf(analysis_results()$ts_data, main = "PACF")
-  })
-
-  output$qqPlot <- renderPlot({
-    req(analysis_results())
-    residuals <- analysis_results()$decomposition$random
-    qqnorm(residuals)
-    qqline(residuals, col = "#e74c3c")
-  })
-
-  output$histPlot <- renderPlot({
-    req(analysis_results())
-    residuals <- analysis_results()$decomposition$random
-    hist(residuals, breaks = 30, col = "#3498db", border = "white",
-         main = "Histogram of Residuals", xlab = "Residuals")
-  })
+  # Gráficos de diagnóstico (OCULTO - pestaña Diagnostics deshabilitada)
+  # output$decompPlot <- renderPlot({
+  #   req(analysis_results())
+  #   plot(analysis_results()$decomposition)
+  # })
+  #
+  # output$subseriesPlot <- renderPlot({
+  #   req(analysis_results())
+  #   monthplot(analysis_results()$ts_data)
+  # })
+  #
+  # output$acfPlot <- renderPlot({
+  #   req(analysis_results())
+  #   acf(analysis_results()$ts_data, main = "ACF")
+  # })
+  #
+  # output$pacfPlot <- renderPlot({
+  #   req(analysis_results())
+  #   pacf(analysis_results()$ts_data, main = "PACF")
+  # })
+  #
+  # output$qqPlot <- renderPlot({
+  #   req(analysis_results())
+  #   residuals <- analysis_results()$decomposition$random
+  #   qqnorm(residuals)
+  #   qqline(residuals, col = "#e74c3c")
+  # })
+  #
+  # output$histPlot <- renderPlot({
+  #   req(analysis_results())
+  #   residuals <- analysis_results()$decomposition$random
+  #   hist(residuals, breaks = 30, col = "#3498db", border = "white",
+  #        main = "Histogram of Residuals", xlab = "Residuals")
+  # })
 
   # Resultados de comparación de distribuciones
   comparison_results <- reactiveVal(NULL)
@@ -748,14 +773,18 @@ server <- function(input, output, session) {
 
     # Obtener componente estacional
     decomp <- analysis_results()$decomposition
+    decomp_type <- analysis_results()$decomp_type
     freq <- frequency(analysis_results()$ts_data)
     seasonal_vals <- as.vector(decomp$seasonal)[1:freq]
-    seasonal_normalized <- seasonal_vals / freq
+    
+    # Para comparación, usar valores directos (no normalizar)
+    # En multiplicativo: componente estacional ya representa factores multiplicativos
+    # En aditivo: componente estacional ya representa desviaciones
 
     # Verificar longitudes
-    if (length(theo_vals) != length(seasonal_normalized)) {
+    if (length(theo_vals) != length(seasonal_vals)) {
       showNotification(
-        paste0("Length mismatch: seasonal has ", length(seasonal_normalized),
+        paste0("Length mismatch: seasonal has ", length(seasonal_vals),
                " values, theoretical has ", length(theo_vals)),
         type = "error"
       )
@@ -767,12 +796,12 @@ server <- function(input, output, session) {
 
     # Test KS
     results$ks <- tryCatch({
-      ks.test(seasonal_normalized, theo_vals, alternative = "two.sided")
+      ks.test(seasonal_vals, theo_vals, alternative = "two.sided")
     }, error = function(e) NULL)
 
     # Test de Kuiper
     results$kuiper <- tryCatch({
-      KSgeneral::Kuiper2sample(seasonal_normalized, theo_vals, tail = TRUE, conservative = FALSE)
+      KSgeneral::Kuiper2sample(seasonal_vals, theo_vals, tail = TRUE, conservative = FALSE)
     }, error = function(e) NULL)
 
     comparison_results(results)

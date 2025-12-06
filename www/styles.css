@@ -19,6 +19,16 @@
   border-radius: var(--border-radius);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   transition: box-shadow var(--transition-speed);
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: visible !important;
+}
+
+.card-body {
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 1rem !important;
+  overflow-x: visible !important;
 }
 
 .card:hover {
@@ -62,6 +72,8 @@
 .sidebar {
   background-color: #f8f9fa;
   border-right: 1px solid #ecf0f1;
+  min-width: 250px !important;
+  max-width: 250px !important;
 }
 
 /* Accordion */
@@ -97,6 +109,24 @@
   border-top: 1px solid #ecf0f1;
 }
 
+/* CRITICAL: Prevenir que modal modifique el layout principal */
+body.modal-open {
+  overflow-y: scroll !important;
+  padding-right: 0 !important;
+}
+
+body.modal-open .bslib-sidebar-layout,
+body.modal-open .bslib-sidebar-layout > .main,
+body.modal-open .bslib-sidebar-layout > .sidebar {
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Asegurar que el backdrop no afecte el layout */
+.modal-backdrop {
+  position: fixed !important;
+}
+
 /* File input */
 .form-control[type="file"] {
   padding: 0.5rem;
@@ -119,6 +149,177 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+}
+
+/* Indicador visual cuando Shiny está procesando */
+body.shiny-busy-indicator::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #3498db, #2ecc71, #f39c12, #e74c3c);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  z-index: 9999;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Estilo para botón en estado de carga */
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.fa-spinner {
+  animation: fa-spin 1s infinite linear;
+}
+
+@keyframes fa-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Overlay de carga opcional (aparece solo en análisis) */
+#loading-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(44, 62, 80, 0.85);
+  z-index: 9998;
+  backdrop-filter: blur(4px);
+}
+
+#loading-overlay.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease-out;
+}
+
+#loading-content {
+  background: white;
+  padding: 2rem 3rem;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+#loading-content .spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #ecf0f1;
+  border-top-color: #3498db;
+  border-radius: 50%;
+  animation: spinner-rotate 1s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes spinner-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+#loading-content h4 {
+  margin: 0;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+#loading-content p {
+  margin: 0.5rem 0 0;
+  color: #7f8c8d;
+  font-size: 0.9rem;
+}
+
+/* Layout optimization - CRITICAL FIX para evitar estrechamiento */
+.bslib-sidebar-layout {
+  display: flex !important;
+  width: 100% !important;
+  transition: none !important;
+}
+
+.bslib-sidebar-layout > .sidebar {
+  flex: 0 0 250px !important;
+  min-width: 250px !important;
+  max-width: 250px !important;
+  transition: none !important;
+}
+
+.bslib-sidebar-layout > .main {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  transition: none !important;
+}
+
+/* BLOQUEAR completamente que bslib cambie el layout */
+.bslib-sidebar-layout.sidebar-collapsed > .main,
+.bslib-sidebar-layout.sidebar-right > .main,
+.bslib-sidebar-layout[class*="sidebar"] > .main {
+  flex: 1 1 auto !important;
+  width: auto !important;
+  max-width: none !important;
+}
+
+/* Forzar que el contenido de main use todo el ancho disponible */
+.bslib-sidebar-layout > .main > * {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Prevenir estrechamiento en containers de Bootstrap */
+.bslib-page-navbar,
+.container-fluid,
+.tab-content,
+.tab-pane {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Asegurar que nav_panel mantenga ancho completo */
+.bslib-page-navbar > .container-fluid {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Dygraphs y plots deben usar ancho completo */
+.dygraph-plot,
+.dygraph-container,
+#viz-mainPlot,
+.shiny-plot-output,
+.shiny-html-output,
+.html-widget {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Forzar que todos los divs dentro de main usen ancho completo */
+.bslib-sidebar-layout > .main div {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
 }
 
 /* Responsivo */
@@ -146,4 +347,27 @@
 
 .fade-in {
   animation: fadeIn var(--transition-speed) ease-out;
+}
+
+/* Animación para el bloque de View Results */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+#resultsSelector {
+  animation: slideInRight 0.5s ease-out;
+}
+
+/* Destacar el título View Results */
+#resultsSelector h6 {
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }

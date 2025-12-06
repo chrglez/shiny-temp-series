@@ -55,7 +55,7 @@ install.packages(c(
 - **readxl**: Lectura de archivos Excel
 - **shinycssloaders**: Indicadores de carga
 - **shinyWidgets**: Widgets adicionales para Shiny
-- **waiter**: Pantallas de espera personalizadas
+- **waiter**: ~~Pantallas de espera personalizadas~~ (DESHABILITADO - causaba problemas de layout)
 - **nlme**: Modelos lineales y no lineales de efectos mixtos
 - **tseries**: Análisis de series temporales
 - **KSgeneral**: Tests de Kolmogorov-Smirnov y Kuiper
@@ -211,10 +211,23 @@ El directorio `data/` contiene un archivo de ejemplo (`example_data.xlsx`) que p
    - Activa la detección de outliers si lo deseas
 3. **Ejecutar Análisis**: Haz clic en "Run Analysis"
 4. **Explorar Resultados**:
-   - Pestaña "Analysis": visualiza la serie y selecciona entre diferentes vistas
-   - Pestaña "Diagnostics": revisa gráficos diagnósticos
-   - Pestaña "Comparison": compara modelos o distribuciones
+   - Pestaña "Analysis": visualiza la serie y selecciona entre diferentes vistas (Decomposition/Seasonality/Distribution)
+   - Gráfico principal: dropdown con Original Series, Trend, Seasonal, Residuals
 5. **Exportar**: Descarga los resultados desde la pestaña "Download"
+
+## 🔧 Notas Importantes
+
+### Layout Verificado (Actualización 2025-12-06)
+- ✅ **Layout estable**: Problema de estrechamiento al ejecutar análisis RESUELTO
+- ✅ **Waiter deshabilitado**: Librería comentada para evitar conflictos
+- ✅ **CSS optimizado**: Comportamiento flexbox natural sin reglas forzadas
+- 📄 Ver documentación completa en: `docs/LAYOUT_FIX_2025-12-06.md` y `VERIFICACION_LAYOUT.md`
+
+### Script de Prueba Rápida
+```r
+# Verifica dependencias y ejecuta la app
+source("test_layout.R")
+```
 
 ## Referencias
 
