@@ -266,10 +266,47 @@ server <- function(input, output, session) {
       
       cat("Step 1: Transform completed\n")
 
-      # Descomposición (aditiva o multiplicativa según selector) - RÁPIDO
+      # Descomposición STL con componente estacional manual (multiplicativo o aditivo)
+      # Basado en Script_def.R de Jaime: stl() para tendencia, cálculo manual del componente estacional
       decomp_type <- input$decompMethod
       t1 <- Sys.time()
-      decomp <- decompose(ts_data, type = decomp_type)
+      stl_decomp <- tryCatch(
+        stl(ts_data, s.window = "periodic"),
+        error = function(e) NULL
+      )
+      if (!is.null(stl_decomp)) {
+        trend_stl <- stl_decomp$time.series[, "trend"]
+        n_ts <- length(ts_data)
+        n_complete <- floor(n_ts / freq) * freq
+
+        if (decomp_type == "multiplicative") {
+          ywt <- ts_data / trend_stl
+          season_matrix <- matrix(as.numeric(ywt)[1:n_complete], nrow = freq)
+          seasonal_component <- rowMeans(season_matrix, na.rm = TRUE)
+          seasonal_component <- seasonal_component / mean(seasonal_component)
+          seasonal_full <- ts(rep(seasonal_component, ceiling(n_ts / freq))[1:n_ts],
+                              start = start(ts_data), frequency = freq)
+          residual_full <- ts_data / (trend_stl * seasonal_full)
+        } else {
+          ywt <- ts_data - trend_stl
+          season_matrix <- matrix(as.numeric(ywt)[1:n_complete], nrow = freq)
+          seasonal_component <- rowMeans(season_matrix, na.rm = TRUE)
+          seasonal_component <- seasonal_component - mean(seasonal_component)
+          seasonal_full <- ts(rep(seasonal_component, ceiling(n_ts / freq))[1:n_ts],
+                              start = start(ts_data), frequency = freq)
+          residual_full <- ts_data - trend_stl - seasonal_full
+        }
+        decomp <- list(
+          trend   = trend_stl,
+          seasonal = seasonal_full,
+          random  = residual_full,
+          x       = ts_data,
+          type    = decomp_type
+        )
+      } else {
+        # Fallback a descomposición clásica si stl() falla
+        decomp <- decompose(ts_data, type = decomp_type)
+      }
       cat("Step 2: Decomposition took", difftime(Sys.time(), t1, units="secs"), "seconds\n")
 
       # ARIMA OPTIMIZADO (Verificado 2025-12-06: AICc idéntico al original, mismo modelo)
@@ -315,12 +352,10 @@ server <- function(input, output, session) {
       cat("Step 6: KW took", difftime(Sys.time(), t5, units="secs"), "seconds\n")
 
       # Análisis autoregresivo (OPTIMIZADO Y VERIFICADO: 87% más rápido, precisión idéntica)
-      # max_p = 6 (captura estructura AR, R²=0.6067 vs original 0.6057)
-      # fisher_mc = 50 (Monte Carlo balanceado, p-values idénticos al original)
-      # Verificado 2025-12-06: 8.6s vs 66.5s original, resultados estadísticamente equivalentes
+      # Parámetros definitivos según Script_def.R de Jaime: max_p = 13, fisher_mc = 2000
       t6 <- Sys.time()
       autoreg_results <- tryCatch({
-        seasonality_autoreg(ts_data, freq = freq, max_p = 6, fisher_mc = 50)
+        seasonality_autoreg(ts_data, freq = freq, max_p = 13, fisher_mc = 2000)
       }, error = function(e) NULL)
       cat("Step 7: Autoreg took", difftime(Sys.time(), t6, units="secs"), "seconds\n")
       
@@ -670,22 +705,22 @@ server <- function(input, output, session) {
       seasonal_normalized <- seasonal_vals / freq
       
       # Generar valor por defecto según modelo y frecuencia
+      # Para multiplicativo: distribución uniforme (1/freq por periodo) para comparar con Vari.estacional/freq
+      # Para aditivo: ceros (sin efecto estacional)
       default_dist <- if (decomp_type == "multiplicative") {
-        # Multiplicativo: todos 1 (sin efecto estacional)
-        paste(rep(1, freq), collapse = ", ")
+        paste(round(rep(1/freq, freq), 8), collapse = ", ")
       } else {
-        # Aditivo: ceros (sin efecto estacional)
         paste(rep(0, freq), collapse = ", ")
       }
 
       tagList(
         h5("Distribution Comparison"),
         p("Compare seasonal component with a theoretical distribution."),
-        
+
         tags$div(class = "alert alert-info", style = "font-size: 0.9rem;",
           tags$strong("Default values: "),
           if (decomp_type == "multiplicative") {
-            paste0("No seasonal effect (", freq, " ones - multiplicative identity)")
+            paste0("No seasonal effect (uniform distribution: ", freq, " values of ", round(1/freq, 4), ")")
           } else {
             paste0("No seasonal effect (", freq, " zeros - additive identity)")
           }
@@ -795,12 +830,12 @@ server <- function(input, output, session) {
     # Calcular tests
     results <- list()
 
-    # Test KS
+    # Test KS: se normaliza el componente estacional dividiendo por freq (como en Script_def.R)
     results$ks <- tryCatch({
-      ks.test(seasonal_vals, theo_vals, alternative = "two.sided")
+      ks.test(seasonal_vals / freq, theo_vals, alternative = "two.sided")
     }, error = function(e) NULL)
 
-    # Test de Kuiper
+    # Test de Kuiper: sin normalización (Kuiper2sample usa valores directos)
     results$kuiper <- tryCatch({
       KSgeneral::Kuiper2sample(seasonal_vals, theo_vals, tail = TRUE, conservative = FALSE)
     }, error = function(e) NULL)
