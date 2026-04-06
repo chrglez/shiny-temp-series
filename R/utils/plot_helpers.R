@@ -16,7 +16,7 @@ plot_decomposition <- function(decomp) {
 
   # Gráfico con ggplot2
   ggplot2::ggplot(df, ggplot2::aes(x = time)) +
-    ggplot2::geom_line(ggplot2::aes(y = observed), color = "#3498db") +
+    ggplot2::geom_line(ggplot2::aes(y = observed), color = "#7BA7C9") +
     ggplot2::theme_minimal() +
     ggplot2::labs(title = "Decomposition", x = "Time", y = "Value")
 }
@@ -48,31 +48,6 @@ plot_acf_pacf <- function(ts_data, type = "acf") {
     )
 }
 
-#' Crear Q-Q plot
-#' @param residuals Vector de residuos
-#' @return ggplot object
-plot_qq <- function(residuals) {
-  df <- data.frame(residuals = residuals)
-
-  ggplot2::ggplot(df, ggplot2::aes(sample = residuals)) +
-    ggplot2::stat_qq() +
-    ggplot2::stat_qq_line(color = "#e74c3c") +
-    ggplot2::theme_minimal() +
-    ggplot2::labs(title = "Q-Q Plot", x = "Theoretical Quantiles", y = "Sample Quantiles")
-}
-
-#' Crear histograma de residuos
-#' @param residuals Vector de residuos
-#' @return ggplot object
-plot_histogram <- function(residuals) {
-  df <- data.frame(residuals = residuals)
-
-  ggplot2::ggplot(df, ggplot2::aes(x = residuals)) +
-    ggplot2::geom_histogram(bins = 30, fill = "#3498db", color = "white", alpha = 0.7) +
-    ggplot2::theme_minimal() +
-    ggplot2::labs(title = "Histogram of Residuals", x = "Residuals", y = "Frequency")
-}
-
 #' Aplicar tema consistente a gráficos plotly
 #' @param p Objeto plotly
 #' @return Objeto plotly con tema aplicado
@@ -82,7 +57,7 @@ apply_plotly_theme <- function(p) {
       font = list(family = "Inter"),
       paper_bgcolor = "white",
       plot_bgcolor = "white",
-      xaxis = list(gridcolor = "#ecf0f1"),
-      yaxis = list(gridcolor = "#ecf0f1")
+      xaxis = list(gridcolor = "#F5F0EB"),
+      yaxis = list(gridcolor = "#F5F0EB")
     )
 }

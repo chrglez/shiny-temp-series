@@ -1,12 +1,12 @@
-# Configuración del tema usando bslib
+# Configuración del tema usando bslib — paleta pastel SeasonDx
 app_theme <- bslib::bs_theme(
   version = 5,
-  primary = "#2c3e50",
-  secondary = "#34495e",
-  success = "#27ae60",
-  info = "#3498db",
-  warning = "#f39c12",
-  danger = "#e74c3c",
+  primary = "#7BA7C9",
+  secondary = "#A8C5DA",
+  success = "#8FBF9F",
+  info = "#92C5E8",
+  warning = "#F0C987",
+  danger = "#E8A0A0",
   base_font = bslib::font_google("Inter"),
   heading_font = bslib::font_google("Poppins"),
   code_font = bslib::font_google("Fira Code")
@@ -14,9 +14,9 @@ app_theme <- bslib::bs_theme(
 
 # Configuración de colores para gráficos
 graph_colors <- list(
-  original = "#3498db",
-  adjusted = "#2ecc71",
-  trend = "#e74c3c",
-  seasonal = "#f39c12",
-  random = "#9b59b6"
+  original = "#7BA7C9",
+  adjusted = "#8FBF9F",
+  trend = "#C97B7B",
+  seasonal = "#D4A76A",
+  random = "#B092C5"
 )

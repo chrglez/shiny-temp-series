@@ -180,11 +180,11 @@ $(document).on('click', '#runAnalysis', function() {
   
   console.log('🔄 Analysis started - waiting for Shiny idle...');
   
-  // Timeout de seguridad más corto (15 segundos máximo)
+  // Timeout de seguridad amplio (5 minutos — el análisis con MC puede tardar)
   analysisTimeout = setTimeout(function() {
-    console.warn('⚠️ Safety timeout - forcing overlay hide after 15 seconds');
+    console.warn('Safety timeout - forcing overlay hide after 5 minutes');
     forceHideOverlay();
-  }, 15000);
+  }, 300000);
 });
 
 // Detectar cuando Shiny está ocupado procesando

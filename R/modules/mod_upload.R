@@ -126,6 +126,31 @@ uploadServer <- function(id) {
     # Frecuencia detectada
     detected_freq <- reactiveVal(NULL)
 
+    # Helper: cargar ejemplo y crear serie temporal directamente
+    load_example_data <- function() {
+      example_path <- "data/example_data.xlsx"
+      if (!file.exists(example_path)) return()
+
+      tryCatch({
+        data <- readxl::read_excel(example_path)
+        detected <- detect_frequency_auto(data)
+
+        values <- as.numeric(data[[2]])
+        if (all(is.na(values))) return()
+
+        ts_data <- ts(values,
+                      frequency = detected$freq,
+                      start = c(detected$start_year, detected$start_period))
+
+        raw_data(data)
+        detected_freq(detected)
+        uploaded_data(ts_data)
+      }, error = function(e) NULL)
+    }
+
+    # Cargar datos de ejemplo al inicio
+    load_example_data()
+
     # Abrir modal de carga
     observeEvent(input$openUpload, {
       showModal(modalDialog(
@@ -250,7 +275,7 @@ uploadServer <- function(id) {
         } else if (file_ext == "csv") {
           data <- read.csv(file_path, stringsAsFactors = FALSE)
         } else {
-          showNotification("Formato de archivo no soportado", type = "error")
+          showNotification("Unsupported file format", type = "error")
           return(NULL)
         }
 
@@ -278,7 +303,7 @@ uploadServer <- function(id) {
         )
 
       }, error = function(e) {
-        showNotification(paste("Error al leer archivo:", e$message), type = "error")
+        showNotification(paste("Error reading file:", e$message), type = "error")
         raw_data(NULL)
       })
     })
@@ -306,7 +331,7 @@ uploadServer <- function(id) {
 
         # Obtener valores numéricos (segunda columna)
         if (ncol(data) < 2) {
-          showNotification("El archivo debe tener al menos 2 columnas", type = "error")
+          showNotification("File must have at least 2 columns", type = "error")
           return(NULL)
         }
 
@@ -314,7 +339,7 @@ uploadServer <- function(id) {
 
         # Verificar que hay datos válidos
         if (all(is.na(values))) {
-          showNotification("No se encontraron valores numéricos válidos", type = "error")
+          showNotification("No valid numeric values found", type = "error")
           return(NULL)
         }
 
@@ -335,12 +360,12 @@ uploadServer <- function(id) {
 
         # Notificar éxito
         showNotification(
-          paste("Datos cargados:", length(values), "observaciones"),
+          paste("Data loaded:", length(values), "observations"),
           type = "message"
         )
 
       }, error = function(e) {
-        showNotification(paste("Error al procesar datos:", e$message), type = "error")
+        showNotification(paste("Error processing data:", e$message), type = "error")
       })
     })
 
