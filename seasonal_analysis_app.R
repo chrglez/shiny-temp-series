@@ -819,10 +819,24 @@ server <- function(input, output, session) {
   output$acfPlot <- renderPlot({
     req(analysis_results())
     par(mfrow = c(1, 2))
-    acf(analysis_results()$decomposition$random, na.action = na.pass, 
-        main = "ACF of Residuals")
-    pacf(analysis_results()$decomposition$random, na.action = na.pass,
-         main = "PACF of Residuals")
+    resid <- analysis_results()$decomposition$random
+    freq <- frequency(resid)
+    # ACF with integer lags
+    acf_result <- acf(resid, na.action = na.pass, plot = FALSE)
+    integer_lags <- as.integer(round(acf_result$lag * freq))
+    plot(integer_lags, acf_result$acf, type = "h",
+         main = "ACF of Residuals", xlab = "Lag", ylab = "ACF")
+    abline(h = 0)
+    n <- sum(!is.na(resid))
+    ci <- qnorm(0.975) / sqrt(n)
+    abline(h = c(ci, -ci), col = "blue", lty = 2)
+    # PACF with integer lags
+    pacf_result <- pacf(resid, na.action = na.pass, plot = FALSE)
+    integer_lags_p <- as.integer(round(pacf_result$lag * freq))
+    plot(integer_lags_p, pacf_result$acf, type = "h",
+         main = "PACF of Residuals", xlab = "Lag", ylab = "PACF")
+    abline(h = 0)
+    abline(h = c(ci, -ci), col = "blue", lty = 2)
   })
   
   # QQ Plot

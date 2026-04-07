@@ -63,7 +63,7 @@ ui <- page_navbar(
 
   # Sidebar con carga de datos
   sidebar = sidebar(
-    width = 250,
+    width = 330,
     open = "always",
 
     # Módulo de carga
@@ -139,6 +139,36 @@ ui <- page_navbar(
           type = 6,
           color = "#92C5E8",
           size = 0.8
+        )
+      )
+    )
+  ),
+
+  # Ficha técnica / Methodological note
+  nav_panel(
+    "Methodological note",
+    icon = icon("book"),
+    card(
+      card_header("Methodological note"),
+      card_body(
+        p("SeasonDx is a web application for the analysis of seasonality in health-related time series."),
+        p("After data upload, users can inspect the series graphically and, if needed, apply a preprocessing step in which outliers are replaced using seasonal-trend decomposition based on loess (STL)."),
+        p("The analytical workflow is organised into three complementary blocks."),
+        tags$ol(
+          tags$li("The series is decomposed into trend-cycle, seasonal and irregular components under either an additive or multiplicative specification, yielding seasonal indices together with autocorrelation-based diagnostics and the Friedman rank-sum test for stable within-year seasonality."),
+          tags$li("SeasonDx applies an autoregressive approach based on automatic ARIMA model selection, combining Welch and Kruskal\u2013Wallis seasonality tests with an autoregressive R\u00B2 measure of seasonal strength and frequency-domain diagnostics based on Bartlett\u2019s Kolmogorov\u2013Smirnov and Fisher\u2019s Kappa tests."),
+          tags$li("The app characterises the shape of the estimated seasonal profile by comparing its empirical distribution with a user-specified theoretical distribution through the two-sample Kolmogorov\u2013Smirnov and Kuiper tests.")
+        ),
+        p("Taken together, these outputs are intended to detect, quantify and characterise seasonal structure from multiple complementary perspectives."),
+        hr(),
+        h5("R packages used by SeasonDx"),
+        tags$ul(
+          tags$li("Dimitrova DS, Jia Y, Kaishev VK, Tan S. KSgeneral: Computing P-Values of the One-Sample K-S Test and the Two-Sample K-S and Kuiper Tests for (Dis)Continuous Null Distribution. R package version 2.0.2. CRAN; 2024."),
+          tags$li("Dowd C. twosamples: Fast Permutation Based Two Sample Tests. R package version 2.0.1. CRAN; 2023."),
+          tags$li("Hyndman R. fpp2: Data for \u201CForecasting: Principles and Practice\u201D (2nd Edition). R package version 2.5.1. CRAN; 2026."),
+          tags$li("Hyndman R, Athanasopoulos G, Bergmeir C, Caceres G, Chhay L, O\u2019Hara-Wild M, Petropoulos F, Razbash S, Wang E, Yasmeen F. forecast: Forecasting functions for time series and linear models. R package version 9.0.2. CRAN; 2026."),
+          tags$li("Ollech D. seastests: Seasonality Tests. R package version 0.15.4. CRAN; 2021."),
+          tags$li("Trapletti A, Hornik K, LeBaron B. tseries: Time Series Analysis and Computational Finance. R package version 0.10-60. CRAN; 2026.")
         )
       )
     )
@@ -394,9 +424,9 @@ server <- function(input, output, session) {
         inputId = "resultType",
         label = NULL,
         choices = list(
-          "Decomposition Analysis" = "decomposition",
-          "Seasonality Tests" = "seasonality",
-          "Distribution Comparison" = "distribution"
+          "Decomposition & indices" = "decomposition",
+          "Autoregressive seasonality" = "seasonality",
+          "Difference tests" = "distribution"
         ),
         selected = "decomposition",
         status = "success",  # Cambiado de primary a success
@@ -461,6 +491,8 @@ server <- function(input, output, session) {
 
       # Construir UI
       tagList(
+        h4("Decomposition and seasonal indices"),
+        hr(),
         h5("Series Summary"),
         tags$table(class = "table table-sm",
           tags$tr(
@@ -515,6 +547,8 @@ server <- function(input, output, session) {
 
       # Construir UI
       tagList(
+        h4("Seasonality analysis using Autoregression"),
+        hr(),
         # ARIMA Model
         if (!is.null(arima_model)) {
           arima_order <- arimaorder(arima_model)
@@ -635,7 +669,7 @@ server <- function(input, output, session) {
       }
 
       tagList(
-        h5("Distribution Comparison"),
+        h5("Two-sample difference tests"),
         p("Compare seasonal component with a theoretical distribution."),
 
         tags$div(class = "alert alert-info", style = "font-size: 0.9rem;",
@@ -658,7 +692,10 @@ server <- function(input, output, session) {
         ),
 
         # Botón para ejecutar comparación
-        actionButton("runComparison", "Run Comparison", class = "btn-primary btn-sm mb-3"),
+        tags$div(style = "display: flex; align-items: center; gap: 10px;",
+          actionButton("runComparison", "Run Comparison", class = "btn-primary btn-sm"),
+          uiOutput("comparisonError")
+        ),
 
         hr(),
 
@@ -678,8 +715,18 @@ server <- function(input, output, session) {
   # Resultados de comparación de distribuciones
   comparison_results <- reactiveVal(NULL)
 
+  # Error message for comparison validation
+  comparison_error <- reactiveVal(NULL)
+  output$comparisonError <- renderUI({
+    err <- comparison_error()
+    if (!is.null(err)) {
+      tags$span(style = "color: #dc3545; font-size: 0.85rem; font-weight: 500;", icon("exclamation-circle"), err)
+    }
+  })
+
   observeEvent(input$runComparison, {
     req(analysis_results(), input$theoreticalDist)
+    comparison_error(NULL)
 
     # Parsear distribución teórica
     theo_text <- input$theoreticalDist
@@ -689,7 +736,7 @@ server <- function(input, output, session) {
     }, error = function(e) NULL)
 
     if (is.null(theo_vals) || length(theo_vals) == 0) {
-      showNotification("Invalid theoretical distribution format", type = "error")
+      comparison_error("Invalid format: enter comma-separated numbers")
       return()
     }
 
@@ -698,18 +745,10 @@ server <- function(input, output, session) {
     decomp_type <- analysis_results()$decomp_type
     freq <- frequency(analysis_results()$ts_data)
     seasonal_vals <- as.vector(decomp$seasonal)[1:freq]
-    
-    # Para comparación, usar valores directos (no normalizar)
-    # En multiplicativo: componente estacional ya representa factores multiplicativos
-    # En aditivo: componente estacional ya representa desviaciones
 
     # Verificar longitudes
     if (length(theo_vals) != length(seasonal_vals)) {
-      showNotification(
-        paste0("Length mismatch: seasonal has ", length(seasonal_vals),
-               " values, theoretical has ", length(theo_vals)),
-        type = "error"
-      )
+      comparison_error(paste0("Expected ", freq, " values, got ", length(theo_vals)))
       return()
     }
 

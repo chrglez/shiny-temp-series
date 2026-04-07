@@ -260,9 +260,9 @@ body.shiny-busy-indicator::before {
 }
 
 .bslib-sidebar-layout > .sidebar {
-  flex: 0 0 250px !important;
-  min-width: 250px !important;
-  max-width: 250px !important;
+  flex: 0 0 330px !important;
+  min-width: 330px !important;
+  max-width: 330px !important;
   transition: none !important;
 }
 

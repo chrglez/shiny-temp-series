@@ -99,9 +99,22 @@ visualizationServer <- function(id, data, analysis_results = NULL, raw_data = NU
     # ACF Plot (Script_def.R step 7: lag.max = 84)
     output$acfPlot <- renderPlot({
       req(data())
-      acf(data(), lag.max = 84, plot = TRUE, type = "correlation",
-          main = "Autocorrelation Function (ACF)",
-          col = "#7BA7C9", lwd = 4)
+      acf_result <- acf(data(), lag.max = 7 * frequency(data()), plot = FALSE)
+      # Convert lags to integer (acf divides by frequency for ts objects)
+      freq <- frequency(data())
+      integer_lags <- as.integer(round(acf_result$lag * freq))
+      max_lag <- max(integer_lags)
+      tick_positions <- c(0, seq(freq, max_lag, by = freq))
+      plot(integer_lags, acf_result$acf, type = "h",
+           main = "Autocorrelation Function (ACF)",
+           xlab = "Lag", ylab = "ACF",
+           col = "#7BA7C9", lwd = 4, xaxt = "n")
+      axis(1, at = tick_positions)
+      abline(h = 0)
+      # Add confidence interval lines
+      n <- length(data())
+      ci <- qnorm(0.975) / sqrt(n)
+      abline(h = c(ci, -ci), col = "blue", lty = 2)
     })
 
     # Seasonal Subseries Plot (Hyndman & Athanasopoulos, 2014)
