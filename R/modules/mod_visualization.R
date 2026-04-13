@@ -13,7 +13,8 @@ visualizationUI <- function(id) {
         selectInput(ns("plotType"), NULL,
           choices = list(
             "Original Series" = "original",
-            "Seasonal Subseries Plot" = "subseries"
+            "Seasonal Subseries Plot" = "subseries",
+            "ACF Plot" = "acf"
           ),
           selected = "original",
           width = "220px"
@@ -23,7 +24,7 @@ visualizationUI <- function(id) {
         shinycssloaders::withSpinner(
           uiOutput(ns("dynamicPlot")),
           type = 6,
-          color = "#3498db",
+          color = "#92C5E8",
           size = 0.8
         )
       )
@@ -48,8 +49,7 @@ visualizationServer <- function(id, data, analysis_results = NULL, raw_data = NU
           choices = list(
             "Original Series" = "original",
             "Seasonal Subseries Plot" = "subseries",
-            "Trend" = "trend",
-            "Seasonal" = "seasonal",
+            "ACF Plot" = "acf",
             "Residuals" = "residuals"
           )
         )
@@ -64,6 +64,8 @@ visualizationServer <- function(id, data, analysis_results = NULL, raw_data = NU
         dygraphOutput(ns("mainPlot"), height = "400px")
       } else if (input$plotType == "subseries") {
         plotOutput(ns("subseriesPlot"), height = "400px")
+      } else if (input$plotType == "acf") {
+        plotOutput(ns("acfPlot"), height = "400px")
       }
     })
 
@@ -85,27 +87,34 @@ visualizationServer <- function(id, data, analysis_results = NULL, raw_data = NU
           create_main_dygraph(data(), "Original Series")
         }
 
-      } else if (input$plotType == "trend") {
-        req(analysis_results())
-        decomp <- analysis_results()$decomposition
-        trend_ts <- decomp$trend
-        create_main_dygraph(trend_ts, "Trend Component") %>%
-          dyOptions(colors = "#e74c3c")
-
-      } else if (input$plotType == "seasonal") {
-        req(analysis_results())
-        decomp <- analysis_results()$decomposition
-        seasonal_ts <- decomp$seasonal
-        create_main_dygraph(seasonal_ts, "Seasonal Component") %>%
-          dyOptions(colors = "#f39c12")
-
       } else if (input$plotType == "residuals") {
         req(analysis_results())
         decomp <- analysis_results()$decomposition
         random_ts <- decomp$random
         create_main_dygraph(random_ts, "Residuals (Random Component)") %>%
-          dyOptions(colors = "#9b59b6")
+          dyOptions(colors = "#B092C5")
       }
+    })
+
+    # ACF Plot (Script_def.R step 7: lag.max = 84)
+    output$acfPlot <- renderPlot({
+      req(data())
+      acf_result <- acf(data(), lag.max = 7 * frequency(data()), plot = FALSE)
+      # Convert lags to integer (acf divides by frequency for ts objects)
+      freq <- frequency(data())
+      integer_lags <- as.integer(round(acf_result$lag * freq))
+      max_lag <- max(integer_lags)
+      tick_positions <- c(0, seq(freq, max_lag, by = freq))
+      plot(integer_lags, acf_result$acf, type = "h",
+           main = "Autocorrelation Function (ACF)",
+           xlab = "Lag", ylab = "ACF",
+           col = "#7BA7C9", lwd = 4, xaxt = "n")
+      axis(1, at = tick_positions)
+      abline(h = 0)
+      # Add confidence interval lines
+      n <- length(data())
+      ci <- qnorm(0.975) / sqrt(n)
+      abline(h = c(ci, -ci), col = "blue", lty = 2)
     })
 
     # Seasonal Subseries Plot (Hyndman & Athanasopoulos, 2014)
@@ -145,8 +154,8 @@ create_main_dygraph <- function(data, title = "") {
       fillAlpha = 0.1,
       drawPoints = FALSE,
       pointSize = 3,
-      colors = c("#3498db", "#2ecc71"),
-      gridLineColor = "#ecf0f1",
+      colors = c("#7BA7C9", "#8FBF9F"),
+      gridLineColor = "#F5F0EB",
       axisLineColor = "#95a5a6",
       axisLabelColor = "#7f8c8d"
     ) %>%
@@ -158,8 +167,8 @@ create_main_dygraph <- function(data, title = "") {
     ) %>%
     dyRangeSelector(
       height = 40,
-      fillColor = "#ecf0f1",
-      strokeColor = "#bdc3c7"
+      fillColor = "#F5F0EB",
+      strokeColor = "#E2D8CF"
     ) %>%
     dyHighlight(
       highlightCircleSize = 5,
@@ -178,12 +187,12 @@ create_comparison_dygraph <- function(original_data, cleaned_data, title = "") {
   combined <- cbind(Original = original_data, Cleaned = cleaned_data)
 
   dygraph(combined, main = title) %>%
-    dySeries("Original", strokeWidth = 1, color = "#bdc3c7") %>%
-    dySeries("Cleaned", strokeWidth = 2, color = "#3498db") %>%
+    dySeries("Original", strokeWidth = 2, color = "#7BA7C9") %>%
+    dySeries("Cleaned", strokeWidth = 2, color = "#E8A87C") %>%
     dyOptions(
       fillGraph = FALSE,
       drawPoints = FALSE,
-      gridLineColor = "#ecf0f1",
+      gridLineColor = "#F5F0EB",
       axisLineColor = "#95a5a6",
       axisLabelColor = "#7f8c8d"
     ) %>%
@@ -195,8 +204,8 @@ create_comparison_dygraph <- function(original_data, cleaned_data, title = "") {
     ) %>%
     dyRangeSelector(
       height = 40,
-      fillColor = "#ecf0f1",
-      strokeColor = "#bdc3c7"
+      fillColor = "#F5F0EB",
+      strokeColor = "#E2D8CF"
     ) %>%
     dyHighlight(
       highlightCircleSize = 5,

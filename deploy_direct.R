@@ -4,7 +4,7 @@
 args <- commandArgs(trailingOnly = TRUE)
 
 # Nombre de la app (por defecto o argumento)
-app_name <- if (length(args) > 0) args[1] else "seasonal-ts"
+app_name <- if (length(args) > 0) args[1] else "SeasonDx"
 
 # IMPORTANTE: Cuenta específica a usar
 target_account <- "chrglez"
@@ -46,7 +46,7 @@ cat("📤 Desplegando a shinyapps.io...\n\n")
 tryCatch({
   rsconnect::deployApp(
     appName = app_name,
-    appTitle = "Time Series Seasonality Analysis",
+    appTitle = "SeasonDx - Seasonality Diagnostics",
     account = target_account,  # Usar cuenta específica
     forceUpdate = TRUE,
     launch.browser = FALSE,  # No abrir navegador en terminal

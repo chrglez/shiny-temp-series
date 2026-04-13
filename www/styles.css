@@ -2,13 +2,13 @@
 
 /* Variables CSS */
 :root {
-  --primary-color: #2c3e50;
-  --secondary-color: #34495e;
-  --accent-color: #3498db;
-  --success-color: #27ae60;
-  --warning-color: #f39c12;
-  --danger-color: #e74c3c;
-  --text-color: #2c3e50;
+  --primary-color: #7BA7C9;
+  --secondary-color: #A8C5DA;
+  --accent-color: #92C5E8;
+  --success-color: #8FBF9F;
+  --warning-color: #F0C987;
+  --danger-color: #E8A0A0;
+  --text-color: #4A5568;
   --border-radius: 8px;
   --transition-speed: 0.3s;
 }
@@ -37,7 +37,7 @@
 
 .card-header {
   background-color: transparent;
-  border-bottom: 1px solid #ecf0f1;
+  border-bottom: 1px solid #F5F0EB;
   font-weight: 600;
 }
 
@@ -71,7 +71,7 @@
 /* Sidebar */
 .sidebar {
   background-color: #f8f9fa;
-  border-right: 1px solid #ecf0f1;
+  border-right: 1px solid #F5F0EB;
   min-width: 250px !important;
   max-width: 250px !important;
 }
@@ -102,11 +102,11 @@
 }
 
 .modal-header {
-  border-bottom: 1px solid #ecf0f1;
+  border-bottom: 1px solid #F5F0EB;
 }
 
 .modal-footer {
-  border-top: 1px solid #ecf0f1;
+  border-top: 1px solid #F5F0EB;
 }
 
 /* CRITICAL: Prevenir que modal modifique el layout principal */
@@ -159,7 +159,7 @@ body.shiny-busy-indicator::before {
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, #3498db, #2ecc71, #f39c12, #e74c3c);
+  background: linear-gradient(90deg, #92C5E8, #8FBF9F, #F0C987, #E8A0A0);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   z-index: 9999;
@@ -201,7 +201,7 @@ body.shiny-busy-indicator::before {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(44, 62, 80, 0.85);
+  background: rgba(74, 85, 104, 0.85);
   z-index: 9998;
   backdrop-filter: blur(4px);
 }
@@ -224,8 +224,8 @@ body.shiny-busy-indicator::before {
 #loading-content .spinner {
   width: 50px;
   height: 50px;
-  border: 4px solid #ecf0f1;
-  border-top-color: #3498db;
+  border: 4px solid #F5F0EB;
+  border-top-color: #92C5E8;
   border-radius: 50%;
   animation: spinner-rotate 1s linear infinite;
   margin: 0 auto 1rem;
@@ -242,13 +242,13 @@ body.shiny-busy-indicator::before {
 
 #loading-content h4 {
   margin: 0;
-  color: #2c3e50;
+  color: #4A5568;
   font-weight: 600;
 }
 
 #loading-content p {
   margin: 0.5rem 0 0;
-  color: #7f8c8d;
+  color: #718096;
   font-size: 0.9rem;
 }
 
@@ -260,9 +260,9 @@ body.shiny-busy-indicator::before {
 }
 
 .bslib-sidebar-layout > .sidebar {
-  flex: 0 0 250px !important;
-  min-width: 250px !important;
-  max-width: 250px !important;
+  flex: 0 0 330px !important;
+  min-width: 330px !important;
+  max-width: 330px !important;
   transition: none !important;
 }
 
@@ -302,6 +302,11 @@ body.shiny-busy-indicator::before {
 .bslib-page-navbar > .container-fluid {
   padding-left: 0 !important;
   padding-right: 0 !important;
+}
+
+/* Evitar colapso del contenedor de visualización durante recarga */
+#viz-dynamicPlot {
+  min-height: 420px;
 }
 
 /* Dygraphs y plots deben usar ancho completo */
@@ -370,4 +375,48 @@ body.shiny-busy-indicator::before {
   font-size: 0.95rem;
   letter-spacing: 0.5px;
   text-transform: uppercase;
+}
+
+/* Logo header bar */
+.logo-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  padding: 0.75rem 1rem;
+  background-color: #fff;
+  border-bottom: 1px solid #F5F0EB;
+}
+
+.logo-header img {
+  height: 45px;
+  width: auto;
+  object-fit: contain;
+}
+
+/* Funding footer */
+.funding-footer {
+  text-align: center;
+  padding: 1rem 2rem;
+  margin-top: 1rem;
+  border-top: 1px solid #F5F0EB;
+  background-color: #FAFAFA;
+}
+
+.funding-footer p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #718096;
+  line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+  .logo-header {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .logo-header img {
+    height: 35px;
+  }
 }

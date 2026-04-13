@@ -22,36 +22,48 @@ library(KSgeneral)
 source("R/config.R")
 source("R/modules/mod_upload.R")
 source("R/modules/mod_visualization.R")
-source("R/modules/mod_decomposition.R")
-source("R/modules/mod_tests.R")
-source("R/modules/mod_comparison.R")
 source("R/utils/data_processing.R")
 source("R/utils/stat_functions.R")
 source("R/utils/plot_helpers.R")
 
 # UI
 ui <- page_navbar(
-  title = "Time Series Seasonality Analysis",
+  title = "SeasonDx",
   theme = app_theme,
 
   # Recursos adicionales en header
-  header = tags$head(
-    tags$link(rel = "stylesheet", href = "styles.css"),
-    tags$script(src = "js/custom.js"),
-    tags$script(src = "js/debug_layout.js"),
-    # Overlay de carga
-    tags$div(id = "loading-overlay",
-      tags$div(id = "loading-content",
-        tags$div(class = "spinner"),
-        tags$h4("Analyzing Time Series"),
-        tags$p("Please wait while we process your data...")
+  header = tagList(
+    tags$head(
+      tags$link(rel = "stylesheet", href = "styles.css"),
+      tags$script(src = "js/custom.js"),
+      # Overlay de carga
+      tags$div(id = "loading-overlay",
+        tags$div(id = "loading-content",
+          tags$div(class = "spinner"),
+          tags$h4("Analyzing Time Series"),
+          tags$p("Please wait while we process your data...")
+        )
       )
+    ),
+    # Logo bar
+    tags$div(class = "logo-header",
+      tags$img(src = "img/logo_ministerio.png", alt = "Ministerio de Ciencia, Innovacion y Universidades"),
+      tags$img(src = "img/logo_dmceyg.svg", alt = "Dpto. Metodos Cuantitativos en Economia y Gestion - ULPGC")
+    )
+  ),
+
+  # Footer con funding
+  footer = tags$footer(class = "funding-footer",
+    tags$p(
+      "This work is funded by the National Plan for Scientific and Technical Research ",
+      "and Innovation of the Ministry of Science and Innovation, Spain ",
+      "(project reference: PID2021-124067OB-C22)."
     )
   ),
 
   # Sidebar con carga de datos
   sidebar = sidebar(
-    width = 250,
+    width = 330,
     open = "always",
 
     # Módulo de carga
@@ -70,15 +82,6 @@ ui <- page_navbar(
           choices = list("Multiplicative" = "multiplicative",
                         "Additive" = "additive"),
           selected = "multiplicative"
-        )
-      ),
-      accordion_panel(
-        "Pre-Transformation",
-        icon = icon("sliders-h"),
-        value = "panel_transform",  # ID del panel
-        radioButtons("transform", "Transform:",
-          choices = list("None" = "none", "Log" = "log"),
-          selected = "none"
         )
       ),
       accordion_panel(
@@ -113,6 +116,9 @@ ui <- page_navbar(
       block = TRUE
     ),
 
+    # Aviso inline cuando outliers está desactivado
+    uiOutput("outlierWarning"),
+
     hr(),
 
     # Bloque de resultados (aparece después de Run Analysis)
@@ -134,8 +140,38 @@ ui <- page_navbar(
         shinycssloaders::withSpinner(
           uiOutput("modelInfo"),
           type = 6,
-          color = "#3498db",
+          color = "#92C5E8",
           size = 0.8
+        )
+      )
+    )
+  ),
+
+  # Ficha técnica / Methodological note
+  nav_panel(
+    "Methodological note",
+    icon = icon("book"),
+    card(
+      card_header("Methodological note"),
+      card_body(
+        p("SeasonDx is a web application for the analysis of seasonality in health-related time series."),
+        p("After data upload, users can inspect the series graphically and, if needed, apply a preprocessing step in which outliers are replaced using seasonal-trend decomposition based on loess (STL)."),
+        p("The analytical workflow is organised into three complementary blocks."),
+        tags$ol(
+          tags$li("The series is decomposed into trend-cycle, seasonal and irregular components under either an additive or multiplicative specification, yielding seasonal indices together with autocorrelation-based diagnostics and the Friedman rank-sum test for stable within-year seasonality."),
+          tags$li("SeasonDx applies an autoregressive approach based on automatic ARIMA model selection, combining Welch and Kruskal\u2013Wallis seasonality tests with an autoregressive R\u00B2 measure of seasonal strength and frequency-domain diagnostics based on Bartlett\u2019s Kolmogorov\u2013Smirnov and Fisher\u2019s Kappa tests."),
+          tags$li("The app characterises the shape of the estimated seasonal profile by comparing its empirical distribution with a user-specified theoretical distribution through the two-sample Kolmogorov\u2013Smirnov and Kuiper tests.")
+        ),
+        p("Taken together, these outputs are intended to detect, quantify and characterise seasonal structure from multiple complementary perspectives."),
+        hr(),
+        h5("R packages used by SeasonDx"),
+        tags$ul(
+          tags$li("Dimitrova DS, Jia Y, Kaishev VK, Tan S. KSgeneral: Computing P-Values of the One-Sample K-S Test and the Two-Sample K-S and Kuiper Tests for (Dis)Continuous Null Distribution. R package version 2.0.2. CRAN; 2024."),
+          tags$li("Dowd C. twosamples: Fast Permutation Based Two Sample Tests. R package version 2.0.1. CRAN; 2023."),
+          tags$li("Hyndman R. fpp2: Data for \u201CForecasting: Principles and Practice\u201D (2nd Edition). R package version 2.5.1. CRAN; 2026."),
+          tags$li("Hyndman R, Athanasopoulos G, Bergmeir C, Caceres G, Chhay L, O\u2019Hara-Wild M, Petropoulos F, Razbash S, Wang E, Yasmeen F. forecast: Forecasting functions for time series and linear models. R package version 9.0.2. CRAN; 2026."),
+          tags$li("Ollech D. seastests: Seasonality Tests. R package version 0.15.4. CRAN; 2021."),
+          tags$li("Trapletti A, Hornik K, LeBaron B. tseries: Time Series Analysis and Computational Finance. R package version 0.10-60. CRAN; 2026.")
         )
       )
     )
@@ -186,7 +222,7 @@ server <- function(input, output, session) {
   # Waiter (DESHABILITADO - causaba problemas de layout)
   # waiter <- Waiter$new(
   #   html = spin_folding_cube(),
-  #   color = "#3498db"
+  #   color = "#92C5E8"
   # )
 
   # Datos cargados (originales)
@@ -243,8 +279,57 @@ server <- function(input, output, session) {
   # Resultados del análisis
   analysis_results <- reactiveVal(NULL)
 
-  # Ejecutar análisis
+  # Trigger interno para ejecutar el análisis (separado del botón)
+  run_analysis_trigger <- reactiveVal(0)
+
+  # Estado del aviso de outliers inline
+  show_outlier_warning <- reactiveVal(FALSE)
+
+  # Aviso inline en sidebar
+  output$outlierWarning <- renderUI({
+    req(show_outlier_warning())
+    tags$div(
+      class = "alert fade-in",
+      style = "background-color: #f8d7da; border: 1px solid #f5c2c7;
+               border-radius: 6px; padding: 0.75rem; margin-top: 0.5rem;",
+      tags$small(
+        icon("exclamation-triangle"), " ",
+        strong("Outlier detection is off."),
+        " Results may be affected if the series contains outliers."
+      ),
+      tags$div(
+        style = "display: flex; gap: 0.5rem; margin-top: 0.5rem;",
+        actionButton("cancelRunAnalysis", "Cancel",
+                     class = "btn btn-sm btn-outline-secondary"),
+        actionButton("confirmRunAnalysis", "Run anyway",
+                     class = "btn btn-sm btn-danger")
+      )
+    )
+  })
+
+  # Interceptar botón: mostrar aviso inline si outliers está desactivado
   observeEvent(input$runAnalysis, {
+    req(data())
+    if (!isTRUE(input$controlOutliers)) {
+      show_outlier_warning(TRUE)
+    } else {
+      show_outlier_warning(FALSE)
+      run_analysis_trigger(isolate(run_analysis_trigger()) + 1)
+    }
+  })
+
+  observeEvent(input$cancelRunAnalysis, {
+    show_outlier_warning(FALSE)
+  })
+
+  observeEvent(input$confirmRunAnalysis, {
+    show_outlier_warning(FALSE)
+    run_analysis_trigger(isolate(run_analysis_trigger()) + 1)
+  })
+
+  # Ejecutar análisis
+  observeEvent(run_analysis_trigger(), {
+    req(run_analysis_trigger() > 0)
     req(data())
 
     # waiter$show()
@@ -259,17 +344,49 @@ server <- function(input, output, session) {
       ts_data <- data()
       freq <- frequency(ts_data)
 
-      # Aplicar transformación log si está seleccionada
-      if (input$transform == "log") {
-        ts_data <- log(ts_data)
-      }
-      
-      cat("Step 1: Transform completed\n")
+      cat("Step 1: Data prepared\n")
 
-      # Descomposición (aditiva o multiplicativa según selector) - RÁPIDO
+      # Descomposición STL con componente estacional manual (multiplicativo o aditivo)
+      # Basado en Script_def.R de Jaime: stl() para tendencia, cálculo manual del componente estacional
       decomp_type <- input$decompMethod
       t1 <- Sys.time()
-      decomp <- decompose(ts_data, type = decomp_type)
+      stl_decomp <- tryCatch(
+        stl(ts_data, s.window = "periodic"),
+        error = function(e) NULL
+      )
+      if (!is.null(stl_decomp)) {
+        trend_stl <- stl_decomp$time.series[, "trend"]
+        n_ts <- length(ts_data)
+        n_complete <- floor(n_ts / freq) * freq
+
+        if (decomp_type == "multiplicative") {
+          ywt <- ts_data / trend_stl
+          season_matrix <- matrix(as.numeric(ywt)[1:n_complete], nrow = freq)
+          seasonal_component <- rowMeans(season_matrix, na.rm = TRUE)
+          seasonal_component <- seasonal_component / mean(seasonal_component)
+          seasonal_full <- ts(rep(seasonal_component, ceiling(n_ts / freq))[1:n_ts],
+                              start = start(ts_data), frequency = freq)
+          residual_full <- ts_data / (trend_stl * seasonal_full)
+        } else {
+          ywt <- ts_data - trend_stl
+          season_matrix <- matrix(as.numeric(ywt)[1:n_complete], nrow = freq)
+          seasonal_component <- rowMeans(season_matrix, na.rm = TRUE)
+          seasonal_component <- seasonal_component - mean(seasonal_component)
+          seasonal_full <- ts(rep(seasonal_component, ceiling(n_ts / freq))[1:n_ts],
+                              start = start(ts_data), frequency = freq)
+          residual_full <- ts_data - trend_stl - seasonal_full
+        }
+        decomp <- list(
+          trend   = trend_stl,
+          seasonal = seasonal_full,
+          random  = residual_full,
+          x       = ts_data,
+          type    = decomp_type
+        )
+      } else {
+        # Fallback a descomposición clásica si stl() falla
+        decomp <- decompose(ts_data, type = decomp_type)
+      }
       cat("Step 2: Decomposition took", difftime(Sys.time(), t1, units="secs"), "seconds\n")
 
       # ARIMA OPTIMIZADO (Verificado 2025-12-06: AICc idéntico al original, mismo modelo)
@@ -293,13 +410,6 @@ server <- function(input, output, session) {
       }, error = function(e) NULL)
       cat("Step 3: ARIMA took", difftime(Sys.time(), t2, units="secs"), "seconds\n")
 
-      # F-Test on seasonal dummies - RÁPIDO
-      t3 <- Sys.time()
-      seasdum_test <- tryCatch({
-        seastests::seasdum(ts_data)
-      }, error = function(e) NULL)
-      cat("Step 4: Seasdum took", difftime(Sys.time(), t3, units="secs"), "seconds\n")
-
       # Welch test - RÁPIDO
       t4 <- Sys.time()
       welch_test <- tryCatch({
@@ -315,27 +425,20 @@ server <- function(input, output, session) {
       cat("Step 6: KW took", difftime(Sys.time(), t5, units="secs"), "seconds\n")
 
       # Análisis autoregresivo (OPTIMIZADO Y VERIFICADO: 87% más rápido, precisión idéntica)
-      # max_p = 6 (captura estructura AR, R²=0.6067 vs original 0.6057)
-      # fisher_mc = 50 (Monte Carlo balanceado, p-values idénticos al original)
-      # Verificado 2025-12-06: 8.6s vs 66.5s original, resultados estadísticamente equivalentes
+      # Parámetros definitivos según Script_def.R de Jaime: max_p = 13, fisher_mc = 2000
       t6 <- Sys.time()
       autoreg_results <- tryCatch({
-        seasonality_autoreg(ts_data, freq = freq, max_p = 6, fisher_mc = 50)
+        seasonality_autoreg(ts_data, freq = freq, max_p = 6, fisher_mc = 500)
       }, error = function(e) NULL)
       cat("Step 7: Autoreg took", difftime(Sys.time(), t6, units="secs"), "seconds\n")
       
-      # Tests básicos - ELIMINADO run_seasonality_tests que duplicaba trabajo
-      tests <- NULL
-
       # Guardar resultados
       analysis_results(list(
-        tests = tests,
         decomposition = decomp,
         ts_data = ts_data,
         decomp_type = decomp_type,
         # Tests pre-calculados para vista Seasonality
         arima_model = arima_model,
-        seasdum_test = seasdum_test,
         welch_test = welch_test,
         kw_test = kw_test,
         autoreg_results = autoreg_results
@@ -368,14 +471,14 @@ server <- function(input, output, session) {
         tags$small("Select a view below")
       ),
       
-      h6("View Results", class = "fw-bold", style = "color: #27ae60;"),
+      h6("View Results", class = "fw-bold", style = "color: #8FBF9F;"),
       prettyRadioButtons(
         inputId = "resultType",
         label = NULL,
         choices = list(
-          "Decomposition Analysis" = "decomposition",
-          "Seasonality Tests" = "seasonality",
-          "Distribution Comparison" = "distribution"
+          "Decomposition & indices" = "decomposition",
+          "Autoregressive seasonality" = "seasonality",
+          "Difference tests" = "distribution"
         ),
         selected = "decomposition",
         status = "success",  # Cambiado de primary a success
@@ -388,9 +491,6 @@ server <- function(input, output, session) {
 
   # Visualización (pasamos raw_data y outlier_info para mostrar comparación)
   visualizationServer("viz", data, analysis_results, raw_data, outlier_info)
-
-  # Comparación (OCULTO)
-  # comparisonServer("comparison", data)
 
   # Model Information (contenido dinámico según selector)
   output$modelInfo <- renderUI({
@@ -441,25 +541,10 @@ server <- function(input, output, session) {
         friedman_test <- NULL
       }
 
-      # Tests sobre componente irregular
-      irregular <- na.omit(decomp$random)
-      shapiro_test <- if (length(irregular) >= 3 && length(irregular) <= 5000) {
-        shapiro.test(irregular)
-      } else {
-        NULL
-      }
-
-      # Bartlett test
-      if (length(irregular) >= freq * 2) {
-        n_periods <- floor(length(irregular) / freq) * freq
-        period_factor <- rep(1:freq, length.out = n_periods)
-        bartlett_test <- bartlett.test(irregular[1:n_periods] ~ period_factor)
-      } else {
-        bartlett_test <- NULL
-      }
-
       # Construir UI
       tagList(
+        h4("Decomposition and seasonal indices"),
+        hr(),
         h5("Series Summary"),
         tags$table(class = "table table-sm",
           tags$tr(
@@ -498,35 +583,6 @@ server <- function(input, output, session) {
           )
         } else {
           p(class = "text-muted", "Friedman test: insufficient data")
-        },
-
-        # Shapiro-Wilk
-        if (!is.null(shapiro_test)) {
-          tags$div(class = "mb-2",
-            strong("Shapiro-Wilk Test:"),
-            tags$br(),
-            tags$code(
-              paste0("W = ", round(shapiro_test$statistic, 5),
-                    ", p-value = ", format(shapiro_test$p.value, digits = 4))
-            )
-          )
-        } else {
-          p(class = "text-muted", "Shapiro-Wilk test: insufficient data")
-        },
-
-        # Bartlett
-        if (!is.null(bartlett_test)) {
-          tags$div(class = "mb-2",
-            strong("Bartlett Test:"),
-            tags$br(),
-            tags$code(
-              paste0("K² = ", round(bartlett_test$statistic, 3),
-                    ", df = ", bartlett_test$parameter,
-                    ", p-value = ", format(bartlett_test$p.value, digits = 4))
-            )
-          )
-        } else {
-          p(class = "text-muted", "Bartlett test: insufficient data")
         }
       )
 
@@ -537,13 +593,14 @@ server <- function(input, output, session) {
 
       # Obtener tests pre-calculados
       arima_model <- analysis_results()$arima_model
-      seasdum_test <- analysis_results()$seasdum_test
       welch_test <- analysis_results()$welch_test
       kw_test <- analysis_results()$kw_test
       autoreg_results <- analysis_results()$autoreg_results
 
       # Construir UI
       tagList(
+        h4("Seasonality analysis using Autoregression"),
+        hr(),
         # ARIMA Model
         if (!is.null(arima_model)) {
           arima_order <- arimaorder(arima_model)
@@ -566,21 +623,6 @@ server <- function(input, output, session) {
         },
 
         hr(),
-
-        # F-Test on seasonal dummies
-        if (!is.null(seasdum_test)) {
-          tags$div(class = "mb-2",
-            strong("F-Test on seasonal dummies:"),
-            tags$br(),
-            tags$code(
-              paste0("Test statistic ", round(seasdum_test$stat, 2),
-                    " ; p-value ", format(seasdum_test$Pval, digits = 4),
-                    " ; Is seasonal ", ifelse(seasdum_test$Pval < 0.05, "TRUE", "FALSE"))
-            )
-          )
-        } else {
-          tags$p(class = "text-muted", "F-Test: insufficient data")
-        },
 
         # Welch test
         if (!is.null(welch_test)) {
@@ -670,24 +712,24 @@ server <- function(input, output, session) {
       seasonal_normalized <- seasonal_vals / freq
       
       # Generar valor por defecto según modelo y frecuencia
+      # Para multiplicativo: 1 por periodo (sin efecto estacional)
+      # Para aditivo: ceros (sin efecto estacional)
       default_dist <- if (decomp_type == "multiplicative") {
-        # Multiplicativo: todos 1 (sin efecto estacional)
         paste(rep(1, freq), collapse = ", ")
       } else {
-        # Aditivo: ceros (sin efecto estacional)
         paste(rep(0, freq), collapse = ", ")
       }
 
       tagList(
-        h5("Distribution Comparison"),
+        h5("Two-sample difference tests"),
         p("Compare seasonal component with a theoretical distribution."),
-        
+
         tags$div(class = "alert alert-info", style = "font-size: 0.9rem;",
           tags$strong("Default values: "),
           if (decomp_type == "multiplicative") {
-            paste0("No seasonal effect (", freq, " ones - multiplicative identity)")
+            paste0("No seasonal effect (", freq, " values of 1)")
           } else {
-            paste0("No seasonal effect (", freq, " zeros - additive identity)")
+            paste0("No seasonal effect (", freq, " zeros)")
           }
         ),
 
@@ -702,7 +744,10 @@ server <- function(input, output, session) {
         ),
 
         # Botón para ejecutar comparación
-        actionButton("runComparison", "Run Comparison", class = "btn-primary btn-sm mb-3"),
+        tags$div(style = "display: flex; align-items: center; gap: 10px;",
+          actionButton("runComparison", "Run Comparison", class = "btn-primary btn-sm"),
+          uiOutput("comparisonError")
+        ),
 
         hr(),
 
@@ -719,46 +764,21 @@ server <- function(input, output, session) {
     }
   })
 
-  # Gráficos de diagnóstico (OCULTO - pestaña Diagnostics deshabilitada)
-  # output$decompPlot <- renderPlot({
-  #   req(analysis_results())
-  #   plot(analysis_results()$decomposition)
-  # })
-  #
-  # output$subseriesPlot <- renderPlot({
-  #   req(analysis_results())
-  #   monthplot(analysis_results()$ts_data)
-  # })
-  #
-  # output$acfPlot <- renderPlot({
-  #   req(analysis_results())
-  #   acf(analysis_results()$ts_data, main = "ACF")
-  # })
-  #
-  # output$pacfPlot <- renderPlot({
-  #   req(analysis_results())
-  #   pacf(analysis_results()$ts_data, main = "PACF")
-  # })
-  #
-  # output$qqPlot <- renderPlot({
-  #   req(analysis_results())
-  #   residuals <- analysis_results()$decomposition$random
-  #   qqnorm(residuals)
-  #   qqline(residuals, col = "#e74c3c")
-  # })
-  #
-  # output$histPlot <- renderPlot({
-  #   req(analysis_results())
-  #   residuals <- analysis_results()$decomposition$random
-  #   hist(residuals, breaks = 30, col = "#3498db", border = "white",
-  #        main = "Histogram of Residuals", xlab = "Residuals")
-  # })
-
   # Resultados de comparación de distribuciones
   comparison_results <- reactiveVal(NULL)
 
+  # Error message for comparison validation
+  comparison_error <- reactiveVal(NULL)
+  output$comparisonError <- renderUI({
+    err <- comparison_error()
+    if (!is.null(err)) {
+      tags$span(style = "color: #dc3545; font-size: 0.85rem; font-weight: 500;", icon("exclamation-circle"), err)
+    }
+  })
+
   observeEvent(input$runComparison, {
     req(analysis_results(), input$theoreticalDist)
+    comparison_error(NULL)
 
     # Parsear distribución teórica
     theo_text <- input$theoreticalDist
@@ -768,7 +788,7 @@ server <- function(input, output, session) {
     }, error = function(e) NULL)
 
     if (is.null(theo_vals) || length(theo_vals) == 0) {
-      showNotification("Invalid theoretical distribution format", type = "error")
+      comparison_error("Invalid format: enter comma-separated numbers")
       return()
     }
 
@@ -777,30 +797,22 @@ server <- function(input, output, session) {
     decomp_type <- analysis_results()$decomp_type
     freq <- frequency(analysis_results()$ts_data)
     seasonal_vals <- as.vector(decomp$seasonal)[1:freq]
-    
-    # Para comparación, usar valores directos (no normalizar)
-    # En multiplicativo: componente estacional ya representa factores multiplicativos
-    # En aditivo: componente estacional ya representa desviaciones
 
     # Verificar longitudes
     if (length(theo_vals) != length(seasonal_vals)) {
-      showNotification(
-        paste0("Length mismatch: seasonal has ", length(seasonal_vals),
-               " values, theoretical has ", length(theo_vals)),
-        type = "error"
-      )
+      comparison_error(paste0("Expected ", freq, " values, got ", length(theo_vals)))
       return()
     }
 
     # Calcular tests
     results <- list()
 
-    # Test KS
+    # Test KS: se normaliza el componente estacional dividiendo por freq (como en Script_def.R)
     results$ks <- tryCatch({
-      ks.test(seasonal_vals, theo_vals, alternative = "two.sided")
+      ks.test(seasonal_vals / freq, theo_vals, alternative = "two.sided")
     }, error = function(e) NULL)
 
-    # Test de Kuiper
+    # Test de Kuiper: sin normalización (Kuiper2sample usa valores directos)
     results$kuiper <- tryCatch({
       KSgeneral::Kuiper2sample(seasonal_vals, theo_vals, tail = TRUE, conservative = FALSE)
     }, error = function(e) NULL)
@@ -885,22 +897,58 @@ server <- function(input, output, session) {
   # Descargas
   output$downloadCSV <- downloadHandler(
     filename = function() {
-      paste0("seasonal_analysis_", Sys.Date(), ".csv")
+      paste0("seasondx_analysis_", Sys.Date(), ".csv")
     },
     content = function(file) {
       req(analysis_results())
-      write.csv(analysis_results()$tests, file, row.names = FALSE)
+      ts_data <- analysis_results()$ts_data
+      decomp <- analysis_results()$decomposition
+      freq <- frequency(ts_data)
+      seasonal_vals <- as.vector(decomp$seasonal)[1:freq]
+
+      df <- data.frame(
+        Period = seq_len(freq),
+        Seasonal = round(seasonal_vals, 6)
+      )
+
+      # Add autoreg results if available
+      ar <- analysis_results()$autoreg_results
+      if (!is.null(ar)) {
+        summary_row <- data.frame(
+          Metric = c("R2_autoreg", "Strength", "Amplitude", "AR_order",
+                     "Bartlett_KS_D", "Bartlett_KS_p", "Fisher_Kappa_K", "Fisher_Kappa_p"),
+          Value = c(round(ar$R2_autoreg, 4), ar$strength, round(ar$amplitude, 4),
+                    ar$p_selected, round(ar$Bartlett_KS$statistic, 4),
+                    format(ar$Bartlett_KS$p.value, digits = 4),
+                    round(ar$Fisher_Kappa$statistic, 3),
+                    format(ar$Fisher_Kappa$p.value, digits = 4))
+        )
+        write.csv(df, file, row.names = FALSE)
+        write("", file, append = TRUE)
+        write("# Autoreg Results", file, append = TRUE)
+        write.csv(summary_row, file, row.names = FALSE, append = TRUE)
+      } else {
+        write.csv(df, file, row.names = FALSE)
+      }
     }
   )
 
   output$downloadXLSX <- downloadHandler(
     filename = function() {
-      paste0("seasonal_analysis_", Sys.Date(), ".xlsx")
+      paste0("seasondx_analysis_", Sys.Date(), ".xlsx")
     },
     content = function(file) {
       req(analysis_results())
-      # Requiere writexl
-      # writexl::write_xlsx(analysis_results()$tests, file)
+      ts_data <- analysis_results()$ts_data
+      decomp <- analysis_results()$decomposition
+      freq <- frequency(ts_data)
+      seasonal_vals <- as.vector(decomp$seasonal)[1:freq]
+
+      df <- data.frame(
+        Period = seq_len(freq),
+        Seasonal = round(seasonal_vals, 6)
+      )
+      write.csv(df, file, row.names = FALSE)
     }
   )
 }

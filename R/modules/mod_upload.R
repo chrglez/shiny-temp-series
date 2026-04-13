@@ -126,15 +126,50 @@ uploadServer <- function(id) {
     # Frecuencia detectada
     detected_freq <- reactiveVal(NULL)
 
+    # Controla si el usuario ha subido/seleccionado datos en el modal actual
+    modal_file_ready <- reactiveVal(FALSE)
+
+    # Helper: cargar ejemplo y crear serie temporal directamente
+    load_example_data <- function() {
+      example_path <- "data/example_data.xlsx"
+      if (!file.exists(example_path)) return()
+
+      tryCatch({
+        data <- readxl::read_excel(example_path)
+        detected <- detect_frequency_auto(data)
+
+        values <- as.numeric(data[[2]])
+        if (all(is.na(values))) return()
+
+        ts_data <- ts(values,
+                      frequency = detected$freq,
+                      start = c(detected$start_year, detected$start_period))
+
+        raw_data(data)
+        detected_freq(detected)
+        uploaded_data(ts_data)
+      }, error = function(e) NULL)
+    }
+
+    # Cargar datos de ejemplo al inicio
+    load_example_data()
+
     # Abrir modal de carga
     observeEvent(input$openUpload, {
+      modal_file_ready(FALSE)
       showModal(modalDialog(
         title = "Upload Your Time Series Data",
         size = "l",
         tabsetPanel(
           tabPanel("Instructions",
             h4("Data Format Requirements"),
+            tags$div(class = "alert alert-info", style = "font-size: 0.9rem; margin-bottom: 0.75rem;",
+              icon("info-circle"), " ",
+              strong("Supported frequencies: "),
+              "only monthly (12 observations/year) and quarterly (4 observations/year) series are supported."
+            ),
             tags$ul(
+              tags$li(strong("Header row required:"), " the first row must contain column names (e.g. \"Date\", \"Value\")"),
               tags$li("First column: Time index (dates or period indicators)"),
               tags$li("Second column: Numeric values"),
               tags$li("Minimum 24 observations for monthly data"),
@@ -164,33 +199,16 @@ uploadServer <- function(id) {
             )
           ),
           tabPanel("Upload",
+            tags$div(class = "alert alert-secondary", style = "font-size: 0.88rem; margin-bottom: 0.75rem;",
+              icon("magic"), " ",
+              "Frequency, start year and start period will be ",
+              strong("auto-detected"), " from your file. You can review and adjust them after uploading."
+            ),
             fileInput(ns("file"), "Choose File",
               accept = c(".xlsx", ".xls", ".csv")
             ),
-            # Frecuencia detectada automáticamente
-            wellPanel(
-              style = "background-color: #f8f9fa;",
-              h5(icon("magic"), " Auto-detected Settings:"),
-              fluidRow(
-                column(4,
-                  radioButtons(ns("frequency"), "Frequency:",
-                    choices = list("Monthly (12)" = 12, "Quarterly (4)" = 4),
-                    selected = 12,
-                    inline = FALSE
-                  )
-                ),
-                column(4,
-                  numericInput(ns("startYear"), "Start Year:",
-                    value = 2010, min = 1900, max = 2100)
-                ),
-                column(4,
-                  numericInput(ns("startPeriod"), "Start Period:",
-                    value = 1, min = 1, max = 12)
-                )
-              ),
-              tags$small(class = "text-muted",
-                "These values were auto-detected. You can adjust them if needed.")
-            ),
+            # Panel de ajuste: solo visible tras cargar un archivo
+            uiOutput(ns("settingsPanel")),
             hr(),
             h5("Data Preview:"),
             DTOutput(ns("preview"))
@@ -219,14 +237,7 @@ uploadServer <- function(id) {
         # Detectar frecuencia automáticamente
         detected <- detect_frequency_auto(data)
         detected_freq(detected)
-
-        # Actualizar controles
-        updateRadioButtons(session, "frequency",
-          selected = as.character(detected$freq))
-        updateNumericInput(session, "startYear",
-          value = detected$start_year)
-        updateNumericInput(session, "startPeriod",
-          value = detected$start_period)
+        modal_file_ready(TRUE)
 
         showNotification("Example data loaded. Click 'Load Data' to confirm.",
           type = "message")
@@ -250,7 +261,7 @@ uploadServer <- function(id) {
         } else if (file_ext == "csv") {
           data <- read.csv(file_path, stringsAsFactors = FALSE)
         } else {
-          showNotification("Formato de archivo no soportado", type = "error")
+          showNotification("Unsupported file format", type = "error")
           return(NULL)
         }
 
@@ -260,14 +271,7 @@ uploadServer <- function(id) {
         # Detectar frecuencia automáticamente
         detected <- detect_frequency_auto(data)
         detected_freq(detected)
-
-        # Actualizar controles con valores detectados
-        updateRadioButtons(session, "frequency",
-          selected = as.character(detected$freq))
-        updateNumericInput(session, "startYear",
-          value = detected$start_year)
-        updateNumericInput(session, "startPeriod",
-          value = detected$start_period)
+        modal_file_ready(TRUE)
 
         # Notificar detección
         freq_label <- if (detected$freq == 12) "Monthly" else "Quarterly"
@@ -278,9 +282,41 @@ uploadServer <- function(id) {
         )
 
       }, error = function(e) {
-        showNotification(paste("Error al leer archivo:", e$message), type = "error")
+        showNotification(paste("Error reading file:", e$message), type = "error")
         raw_data(NULL)
       })
+    })
+
+    # Panel de ajuste de settings (visible solo cuando el usuario ha subido datos en el modal)
+    output$settingsPanel <- renderUI({
+      req(modal_file_ready())
+      detected <- detected_freq()
+      wellPanel(
+        style = "background-color: #f8f9fa;",
+        h5(icon("magic"), " Auto-detected Settings"),
+        tags$small(class = "text-muted d-block mb-2",
+          "Review the values below and adjust if needed before clicking \"Load Data\"."
+        ),
+        fluidRow(
+          column(4,
+            radioButtons(ns("frequency"), "Frequency:",
+              choices = list("Monthly (12)" = 12, "Quarterly (4)" = 4),
+              selected = if (!is.null(detected)) as.character(detected$freq) else "12",
+              inline = FALSE
+            )
+          ),
+          column(4,
+            numericInput(ns("startYear"), "Start Year:",
+              value = if (!is.null(detected)) detected$start_year else 2010,
+              min = 1900, max = 2100)
+          ),
+          column(4,
+            numericInput(ns("startPeriod"), "Start Period:",
+              value = if (!is.null(detected)) detected$start_period else 1,
+              min = 1, max = 12)
+          )
+        )
+      )
     })
 
     # Preview de datos
@@ -306,7 +342,7 @@ uploadServer <- function(id) {
 
         # Obtener valores numéricos (segunda columna)
         if (ncol(data) < 2) {
-          showNotification("El archivo debe tener al menos 2 columnas", type = "error")
+          showNotification("File must have at least 2 columns", type = "error")
           return(NULL)
         }
 
@@ -314,7 +350,7 @@ uploadServer <- function(id) {
 
         # Verificar que hay datos válidos
         if (all(is.na(values))) {
-          showNotification("No se encontraron valores numéricos válidos", type = "error")
+          showNotification("No valid numeric values found", type = "error")
           return(NULL)
         }
 
@@ -335,12 +371,12 @@ uploadServer <- function(id) {
 
         # Notificar éxito
         showNotification(
-          paste("Datos cargados:", length(values), "observaciones"),
+          paste("Data loaded:", length(values), "observations"),
           type = "message"
         )
 
       }, error = function(e) {
-        showNotification(paste("Error al procesar datos:", e$message), type = "error")
+        showNotification(paste("Error processing data:", e$message), type = "error")
       })
     })
 
