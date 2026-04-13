@@ -116,6 +116,9 @@ ui <- page_navbar(
       block = TRUE
     ),
 
+    # Aviso inline cuando outliers está desactivado
+    uiOutput("outlierWarning"),
+
     hr(),
 
     # Bloque de resultados (aparece después de Run Analysis)
@@ -276,8 +279,57 @@ server <- function(input, output, session) {
   # Resultados del análisis
   analysis_results <- reactiveVal(NULL)
 
-  # Ejecutar análisis
+  # Trigger interno para ejecutar el análisis (separado del botón)
+  run_analysis_trigger <- reactiveVal(0)
+
+  # Estado del aviso de outliers inline
+  show_outlier_warning <- reactiveVal(FALSE)
+
+  # Aviso inline en sidebar
+  output$outlierWarning <- renderUI({
+    req(show_outlier_warning())
+    tags$div(
+      class = "alert fade-in",
+      style = "background-color: #f8d7da; border: 1px solid #f5c2c7;
+               border-radius: 6px; padding: 0.75rem; margin-top: 0.5rem;",
+      tags$small(
+        icon("exclamation-triangle"), " ",
+        strong("Outlier detection is off."),
+        " Results may be affected if the series contains outliers."
+      ),
+      tags$div(
+        style = "display: flex; gap: 0.5rem; margin-top: 0.5rem;",
+        actionButton("cancelRunAnalysis", "Cancel",
+                     class = "btn btn-sm btn-outline-secondary"),
+        actionButton("confirmRunAnalysis", "Run anyway",
+                     class = "btn btn-sm btn-danger")
+      )
+    )
+  })
+
+  # Interceptar botón: mostrar aviso inline si outliers está desactivado
   observeEvent(input$runAnalysis, {
+    req(data())
+    if (!isTRUE(input$controlOutliers)) {
+      show_outlier_warning(TRUE)
+    } else {
+      show_outlier_warning(FALSE)
+      run_analysis_trigger(isolate(run_analysis_trigger()) + 1)
+    }
+  })
+
+  observeEvent(input$cancelRunAnalysis, {
+    show_outlier_warning(FALSE)
+  })
+
+  observeEvent(input$confirmRunAnalysis, {
+    show_outlier_warning(FALSE)
+    run_analysis_trigger(isolate(run_analysis_trigger()) + 1)
+  })
+
+  # Ejecutar análisis
+  observeEvent(run_analysis_trigger(), {
+    req(run_analysis_trigger() > 0)
     req(data())
 
     # waiter$show()
@@ -660,10 +712,10 @@ server <- function(input, output, session) {
       seasonal_normalized <- seasonal_vals / freq
       
       # Generar valor por defecto según modelo y frecuencia
-      # Para multiplicativo: distribución uniforme (1/freq por periodo) para comparar con Vari.estacional/freq
+      # Para multiplicativo: 1 por periodo (sin efecto estacional)
       # Para aditivo: ceros (sin efecto estacional)
       default_dist <- if (decomp_type == "multiplicative") {
-        paste(round(rep(1/freq, freq), 8), collapse = ", ")
+        paste(rep(1, freq), collapse = ", ")
       } else {
         paste(rep(0, freq), collapse = ", ")
       }
@@ -675,9 +727,9 @@ server <- function(input, output, session) {
         tags$div(class = "alert alert-info", style = "font-size: 0.9rem;",
           tags$strong("Default values: "),
           if (decomp_type == "multiplicative") {
-            paste0("No seasonal effect (uniform distribution: ", freq, " values of ", round(1/freq, 4), ")")
+            paste0("No seasonal effect (", freq, " values of 1)")
           } else {
-            paste0("No seasonal effect (", freq, " zeros - additive identity)")
+            paste0("No seasonal effect (", freq, " zeros)")
           }
         ),
 
