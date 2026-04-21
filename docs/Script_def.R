@@ -125,11 +125,15 @@ plot(residual.astl) # additive residual plot
 
 # autocorrelation function plot
 
-auto_correlation <- acf(TNSO.ts, lag.max = 84, 
+auto_correlation <- acf(TNSO.ts, lag.max = 20,
                         plot= TRUE, type = 'correlation', 
-                        main='ACF Plot',col='brown', lwd = 4)
+                        main='ACF Plot',col='brown', lwd = 2)
 
+acf(TNSO.ts, lag.max = 48, plot = TRUE)
 
+acf(TNSO.ts, max.mfrow = 7)
+
+acf.plot <- acf(TNSO.ts)
 
 ## Test no-paramétrico de rangos de Friedman
 
@@ -177,11 +181,11 @@ summary(M)
 ## Welch seasonality test
 # Test for seasonality in a time series using Welch’s ANOVA test
 
-welch(TNSO.ts, freq = 12, diff = T, residuals = F, autoarima = T, rank = F)
+welch(TNSO.ts, freq = 12, diff = F, residuals = T, autoarima = T, rank = F)
 isSeasonal(TNSO.ts, test = "welch", freq = 12)
 
 ## Kruskall Wallis test
-kw(TNSO.ts, freq = 12, diff = T, residuals = F, autoarima = T)
+kw(TNSO.ts, freq = 12, diff = F, residuals = T, autoarima = T)
 isSeasonal(TNSO.ts, test = "kw", freq = 12)
 
 ## Autoregression as a means of assessing the strength of seasonality in a time series

@@ -17,6 +17,8 @@ library(shinyWidgets)
 library(nlme)
 library(tseries)
 library(KSgeneral)
+library(mirai)
+library(promises)
 
 # Cargar módulos y utilidades
 source("R/config.R")
@@ -26,6 +28,13 @@ source("R/utils/data_processing.R")
 source("R/utils/stat_functions.R")
 source("R/utils/plot_helpers.R")
 
+# Worker mirai compartido para ExtendedTask (auto.arima + welch + kw + seasonality_autoreg).
+# Un único daemon es suficiente para la concurrencia esperada en shinyapps.io.
+tryCatch(
+  mirai::daemons(1),
+  error = function(e) message("mirai daemons init: ", conditionMessage(e))
+)
+
 # UI
 ui <- page_navbar(
   title = "SeasonDx",
@@ -34,6 +43,11 @@ ui <- page_navbar(
   # Recursos adicionales en header
   header = tagList(
     tags$head(
+      tags$link(rel = "icon", type = "image/x-icon", href = "favicon.ico"),
+      tags$link(rel = "icon", type = "image/png", sizes = "32x32", href = "favicon-32x32.png"),
+      tags$link(rel = "icon", type = "image/png", sizes = "16x16", href = "favicon-16x16.png"),
+      tags$link(rel = "apple-touch-icon", sizes = "180x180", href = "apple-touch-icon.png"),
+      tags$link(rel = "manifest", href = "site.webmanifest"),
       tags$link(rel = "stylesheet", href = "styles.css"),
       tags$script(src = "js/custom.js"),
       # Overlay de carga
@@ -279,6 +293,48 @@ server <- function(input, output, session) {
   # Resultados del análisis
   analysis_results <- reactiveVal(NULL)
 
+  # Estado de los tests asíncronos: "idle" | "running" | "done" | "error"
+  tests_status <- reactiveVal("idle")
+
+  # Timestamp de arranque (para reportar tiempo total sync+async en logs)
+  analysis_start_time <- reactiveVal(NULL)
+
+  # ExtendedTask: aísla las operaciones pesadas (auto.arima + welch/kw con
+  # autoarima=TRUE + seasonality_autoreg con 14 fits GLS) en un worker mirai
+  # para que el navegador no se bloquee. El tab Decomposition queda disponible
+  # en ~1s; los tests aparecen cuando el worker termina (~2-3 min en shinyapps).
+  heavy_task <- ExtendedTask$new(function(ts_data, freq) {
+    mirai::mirai({
+      source("R/utils/stat_functions.R")
+
+      arima_model <- tryCatch(
+        forecast::auto.arima(ts_data),
+        error = function(e) NULL
+      )
+      welch_test <- tryCatch(
+        seastests::welch(ts_data, freq = freq, diff = FALSE, residuals = TRUE,
+                         autoarima = TRUE, rank = FALSE),
+        error = function(e) NULL
+      )
+      kw_test <- tryCatch(
+        seastests::kw(ts_data, freq = freq, diff = FALSE, residuals = TRUE,
+                      autoarima = TRUE),
+        error = function(e) NULL
+      )
+      autoreg_results <- tryCatch(
+        seasonality_autoreg(ts_data, freq = freq, max_p = 13, fisher_mc = 2000),
+        error = function(e) NULL
+      )
+
+      list(
+        arima_model = arima_model,
+        welch_test = welch_test,
+        kw_test = kw_test,
+        autoreg_results = autoreg_results
+      )
+    }, ts_data = ts_data, freq = freq)
+  })
+
   # Trigger interno para ejecutar el análisis (separado del botón)
   run_analysis_trigger <- reactiveVal(0)
 
@@ -327,27 +383,29 @@ server <- function(input, output, session) {
     run_analysis_trigger(isolate(run_analysis_trigger()) + 1)
   })
 
-  # Ejecutar análisis
+  # Ejecutar análisis — fase síncrona (STL, ~1s) + lanzamiento de ExtendedTask
   observeEvent(run_analysis_trigger(), {
     req(run_analysis_trigger() > 0)
     req(data())
 
-    # waiter$show()
+    # Guardia: ignorar si ya hay tests en curso (evita doble click)
+    if (heavy_task$status() == "running") {
+      return()
+    }
 
     tryCatch({
-      # Timestamp de inicio
       start_time <- Sys.time()
+      analysis_start_time(start_time)
       cat("\n========================================\n")
       cat("🔄 Starting analysis at:", format(start_time), "\n")
-      
-      # Realizar análisis
+
       ts_data <- data()
       freq <- frequency(ts_data)
 
       cat("Step 1: Data prepared\n")
 
-      # Descomposición STL con componente estacional manual (multiplicativo o aditivo)
-      # Basado en Script_def.R de Jaime: stl() para tendencia, cálculo manual del componente estacional
+      # --- Fase síncrona: descomposición STL (~1s) ---
+      # Basado en Script_def.R: stl() para tendencia, cálculo manual del componente estacional
       decomp_type <- input$decompMethod
       t1 <- Sys.time()
       stl_decomp <- tryCatch(
@@ -389,88 +447,117 @@ server <- function(input, output, session) {
       }
       cat("Step 2: Decomposition took", difftime(Sys.time(), t1, units="secs"), "seconds\n")
 
-      # ARIMA OPTIMIZADO (Verificado 2025-12-06: AICc idéntico al original, mismo modelo)
-      t2 <- Sys.time()
-      arima_model <- tryCatch({
-        forecast::auto.arima(ts_data, 
-                            seasonal = TRUE, 
-                            stepwise = TRUE,
-                            approximation = TRUE,
-                            max.p = 2,      # Optimizado (original: 5)
-                            max.q = 2,      # Optimizado (original: 5)
-                            max.P = 1,      # Optimizado (original: 2)
-                            max.Q = 1,      # Optimizado (original: 2)
-                            max.d = 1,
-                            max.D = 1,
-                            max.order = 4,  # Límite total (p+q+P+Q)
-                            allowdrift = FALSE,
-                            allowmean = FALSE,
-                            ic = "aicc",
-                            trace = FALSE)
-      }, error = function(e) NULL)
-      cat("Step 3: ARIMA took", difftime(Sys.time(), t2, units="secs"), "seconds\n")
-
-      # Welch test - RÁPIDO
-      t4 <- Sys.time()
-      welch_test <- tryCatch({
-        seastests::welch(ts_data)
-      }, error = function(e) NULL)
-      cat("Step 5: Welch took", difftime(Sys.time(), t4, units="secs"), "seconds\n")
-
-      # Kruskal-Wallis - RÁPIDO
-      t5 <- Sys.time()
-      kw_test <- tryCatch({
-        seastests::kw(ts_data)
-      }, error = function(e) NULL)
-      cat("Step 6: KW took", difftime(Sys.time(), t5, units="secs"), "seconds\n")
-
-      # Análisis autoregresivo (OPTIMIZADO Y VERIFICADO: 87% más rápido, precisión idéntica)
-      # Parámetros definitivos según Script_def.R de Jaime: max_p = 13, fisher_mc = 2000
-      t6 <- Sys.time()
-      autoreg_results <- tryCatch({
-        seasonality_autoreg(ts_data, freq = freq, max_p = 6, fisher_mc = 500)
-      }, error = function(e) NULL)
-      cat("Step 7: Autoreg took", difftime(Sys.time(), t6, units="secs"), "seconds\n")
-      
-      # Guardar resultados
+      # Publicar resultados síncronos INMEDIATAMENTE — el tab Decomposition se
+      # renderiza ya. Los tests (arima/welch/kw/autoreg) llegarán cuando el
+      # ExtendedTask termine (ver observer más abajo).
       analysis_results(list(
         decomposition = decomp,
         ts_data = ts_data,
         decomp_type = decomp_type,
-        # Tests pre-calculados para vista Seasonality
-        arima_model = arima_model,
-        welch_test = welch_test,
-        kw_test = kw_test,
-        autoreg_results = autoreg_results
+        arima_model = NULL,
+        welch_test = NULL,
+        kw_test = NULL,
+        autoreg_results = NULL
       ))
-      
-      # Timestamp de finalización
-      end_time <- Sys.time()
-      elapsed <- difftime(end_time, start_time, units = "secs")
-      cat("✅ Analysis completed in:", round(elapsed, 2), "seconds\n")
+
+      # --- Fase asíncrona: lanzar ExtendedTask en mirai worker ---
+      tests_status("running")
+      cat("Step 3+: Launching async tests (auto.arima + welch + kw + autoreg)\n")
+      heavy_task$invoke(ts_data = ts_data, freq = freq)
+
+      sync_end <- Sys.time()
+      cat("✅ Sync phase completed in:",
+          round(difftime(sync_end, start_time, units = "secs"), 2), "seconds\n")
+      cat("   Async tests running in background — UI not blocked.\n")
       cat("========================================\n\n")
 
     }, error = function(e) {
       showNotification(paste("Error:", e$message), type = "error")
+      tests_status("error")
     })
+  })
 
-    # waiter$hide()
+  # Enviar estado de los tests a JS para mantener el botón "Run Analysis"
+  # deshabilitado durante la fase asíncrona.
+  observe({
+    session$sendCustomMessage("testsStatus", tests_status())
+  })
+
+  # Observer: cuando heavy_task termina, fusionar resultados en analysis_results
+  observe({
+    status <- heavy_task$status()
+    req(status %in% c("success", "error"))
+
+    if (status == "success") {
+      results <- heavy_task$result()
+      current <- isolate(analysis_results())
+      if (!is.null(current)) {
+        analysis_results(modifyList(current, list(
+          arima_model = results$arima_model,
+          welch_test = results$welch_test,
+          kw_test = results$kw_test,
+          autoreg_results = results$autoreg_results
+        )))
+      }
+      tests_status("done")
+
+      start_time <- isolate(analysis_start_time())
+      if (!is.null(start_time)) {
+        elapsed <- difftime(Sys.time(), start_time, units = "secs")
+        cat("✅ Async tests completed. Total elapsed:",
+            round(elapsed, 2), "seconds\n")
+        cat("========================================\n\n")
+      }
+    } else {
+      err <- tryCatch(heavy_task$result(), error = function(e) conditionMessage(e))
+      showNotification(paste("Async tests failed:", err), type = "warning")
+      tests_status("error")
+      cat("❌ Async tests errored:", err, "\n")
+    }
   })
 
   # Selector de resultados (aparece después de Run Analysis)
   output$resultsSelector <- renderUI({
     req(analysis_results())
 
-    tagList(
-      # Título destacado con animación
+    status <- tests_status()
+
+    # Banner dinámico según estado del ExtendedTask
+    status_banner <- if (status == "running") {
+      tags$div(
+        class = "alert alert-info fade-in",
+        style = "padding: 0.75rem; margin-bottom: 1rem;",
+        tags$strong(
+          tags$span(class = "spinner-border spinner-border-sm",
+                    role = "status", `aria-hidden` = "true",
+                    style = "margin-right: 0.5rem;"),
+          "Decomposition ready"
+        ),
+        tags$br(),
+        tags$small("Statistical tests running in background (~2-3 min). ",
+                   "You can explore the Decomposition view now.")
+      )
+    } else if (status == "error") {
+      tags$div(
+        class = "alert alert-warning fade-in",
+        style = "padding: 0.75rem; margin-bottom: 1rem;",
+        tags$strong(icon("exclamation-triangle"), " Tests failed"),
+        tags$br(),
+        tags$small("Decomposition is available. Tests could not be computed.")
+      )
+    } else {
       tags$div(
         class = "alert alert-success fade-in",
         style = "padding: 0.75rem; margin-bottom: 1rem;",
         tags$strong(icon("check-circle"), " Analysis Complete"),
         tags$br(),
         tags$small("Select a view below")
-      ),
-      
+      )
+    }
+
+    tagList(
+      status_banner,
+
       h6("View Results", class = "fw-bold", style = "color: #8FBF9F;"),
       prettyRadioButtons(
         inputId = "resultType",
@@ -596,6 +683,28 @@ server <- function(input, output, session) {
       welch_test <- analysis_results()$welch_test
       kw_test <- analysis_results()$kw_test
       autoreg_results <- analysis_results()$autoreg_results
+
+      # Placeholder mientras el ExtendedTask corre — todos los tests son NULL
+      if (tests_status() == "running" &&
+          is.null(arima_model) && is.null(welch_test) &&
+          is.null(kw_test) && is.null(autoreg_results)) {
+        return(tagList(
+          h4("Seasonality analysis using Autoregression"),
+          hr(),
+          tags$div(
+            class = "alert alert-info",
+            style = "text-align: center; padding: 2rem;",
+            tags$span(class = "spinner-border text-primary", role = "status",
+                      style = "width: 3rem; height: 3rem; margin-bottom: 1rem;"),
+            tags$h5("Running statistical tests..."),
+            tags$p(class = "text-muted",
+                   "auto.arima, Welch, Kruskal-Wallis and autoregressive tests ",
+                   "are being computed in a background worker. Expected ~2-3 min."),
+            tags$p(class = "text-muted small",
+                   "Results will appear here automatically when finished.")
+          )
+        ))
+      }
 
       # Construir UI
       tagList(

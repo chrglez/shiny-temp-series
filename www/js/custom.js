@@ -131,27 +131,31 @@ function forceHideOverlay() {
     clearTimeout(analysisTimeout);
     analysisTimeout = null;
   }
-  
+
   // Ocultar overlay
   $('#loading-overlay').removeClass('active');
-  
-  // Restaurar botón
+
+  // Restaurar botón SOLO si los tests asíncronos no siguen corriendo.
+  // Si tests_status == "running", el handler testsStatus mantiene el estado
+  // "Running tests..." y lo restaurará cuando llegue "done"/"error"/"idle".
   const btn = $('#runAnalysis');
-  btn.prop('disabled', false);
-  btn.html('<i class="fa fa-play"></i> Run Analysis');
-  btn.css('opacity', '1');
-  
+  if (!window.asyncTestsRunning) {
+    btn.prop('disabled', false);
+    btn.html('<i class="fa fa-play"></i> Run Analysis');
+    btn.css('opacity', '1');
+  }
+
   // Cerrar acordeones de configuración
   setTimeout(function() {
     // Cerrar todos los paneles del accordion
     $('#configAccordion .accordion-collapse.show').removeClass('show');
     console.log('📁 Configuration accordions collapsed');
   }, 200);
-  
+
   // Resetear flag
   analysisInProgress = false;
-  
-  console.log('🏁 Analysis finished - overlay hidden');
+
+  console.log('🏁 Sync phase finished - overlay hidden');
 }
 
 // Variables para controlar el estado del análisis
@@ -250,4 +254,28 @@ $(document).on('hidden.bs.modal', function() {
 // Comunicación con Shiny
 Shiny.addCustomMessageHandler('showNotification', function(data) {
   showNotification(data.message, data.type);
+});
+
+// Estado del ExtendedTask (fase asíncrona): "idle" | "running" | "done" | "error".
+// Enviado desde el servidor cada vez que tests_status cambia.
+window.asyncTestsRunning = false;
+
+Shiny.addCustomMessageHandler('testsStatus', function(status) {
+  const btn = $('#runAnalysis');
+
+  if (status === 'running') {
+    window.asyncTestsRunning = true;
+    btn.prop('disabled', true);
+    btn.html('<i class="fa fa-spinner fa-spin"></i> Running tests...');
+    btn.css('opacity', '0.7');
+    console.log('⏳ Async tests running — button held disabled');
+  } else {
+    // "idle", "done", "error"
+    window.asyncTestsRunning = false;
+    btn.prop('disabled', false);
+    btn.html('<i class="fa fa-play"></i> Run Analysis');
+    btn.css('opacity', '1');
+    if (status === 'done') console.log('✅ Async tests finished — button restored');
+    if (status === 'error') console.log('❌ Async tests errored — button restored');
+  }
 });

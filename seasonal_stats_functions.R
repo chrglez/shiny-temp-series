@@ -487,9 +487,12 @@ run_seasonality_tests <- function(ts_data, freq = frequency(ts_data)) {
   })
   
   # 4. Test de Welch
+  # Parámetros corregidos (Jaime, 2026-04-17): diff = FALSE, residuals = TRUE
+  # fuerzan el uso de la estructura autoarima. La combinación diff=T, residuals=F
+  # ignora autoarima y trabaja sobre diferencias de la serie original.
   tryCatch({
-    welch_result <- seastests::welch(ts_data, freq = freq, diff = TRUE, 
-                                     residuals = FALSE, autoarima = TRUE)
+    welch_result <- seastests::welch(ts_data, freq = freq, diff = FALSE,
+                                     residuals = TRUE, autoarima = TRUE, rank = FALSE)
     results$welch <- data.frame(
       Test = "Welch ANOVA",
       Statistic = welch_result$stat,
@@ -504,11 +507,12 @@ run_seasonality_tests <- function(ts_data, freq = frequency(ts_data)) {
       Is_Seasonal = NA
     )
   })
-  
+
   # 5. Test de Kruskal-Wallis
+  # Mismos parámetros que Welch (Jaime, 2026-04-17)
   tryCatch({
-    kw_result <- seastests::kw(ts_data, freq = freq, diff = TRUE, 
-                               residuals = FALSE, autoarima = TRUE)
+    kw_result <- seastests::kw(ts_data, freq = freq, diff = FALSE,
+                               residuals = TRUE, autoarima = TRUE)
     results$kw <- data.frame(
       Test = "Kruskal-Wallis",
       Statistic = kw_result$stat,
