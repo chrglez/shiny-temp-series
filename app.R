@@ -534,8 +534,10 @@ server <- function(input, output, session) {
           "Decomposition ready"
         ),
         tags$br(),
-        tags$small("Statistical tests running in background (~2-3 min). ",
-                   "You can explore the Decomposition view now.")
+        tags$small("Seasonality analysis using autoregression running in the ",
+                   "background (~2-3 min). In the meantime, you can explore the ",
+                   "graphical analysis, the decomposition and seasonal indices ",
+                   "or the two-sample difference tests.")
       )
     } else if (status == "error") {
       tags$div(
@@ -913,15 +915,13 @@ server <- function(input, output, session) {
       return()
     }
 
-    # Calcular tests
+    # Calcular tests (ambos sobre los mismos valores sin normalizar)
     results <- list()
 
-    # Test KS: se normaliza el componente estacional dividiendo por freq (como en Script_def.R)
     results$ks <- tryCatch({
-      ks.test(seasonal_vals / freq, theo_vals, alternative = "two.sided")
+      ks.test(seasonal_vals, theo_vals, alternative = "two.sided")
     }, error = function(e) NULL)
 
-    # Test de Kuiper: sin normalización (Kuiper2sample usa valores directos)
     results$kuiper <- tryCatch({
       KSgeneral::Kuiper2sample(seasonal_vals, theo_vals, tail = TRUE, conservative = FALSE)
     }, error = function(e) NULL)
