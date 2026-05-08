@@ -231,7 +231,7 @@ ui <- page_navbar(
           ),
           card_footer(
             downloadBttn("downloadCSV",
-              tagList(icon("download"), " Download CSV"),
+              "Download CSV",
               style = "material-flat", color = "primary", block = TRUE)
           )
         ),
@@ -258,7 +258,7 @@ ui <- page_navbar(
           ),
           card_footer(
             downloadBttn("downloadXLSX",
-              tagList(icon("download"), " Download Excel"),
+              "Download Excel",
               style = "material-flat", color = "success", block = TRUE)
           )
         ),
@@ -285,7 +285,7 @@ ui <- page_navbar(
           ),
           card_footer(
             downloadBttn("downloadReport",
-              tagList(icon("download"), " Download HTML"),
+              "Download HTML",
               style = "material-flat", color = "warning", block = TRUE)
           )
         ),
@@ -312,7 +312,7 @@ ui <- page_navbar(
           ),
           card_footer(
             downloadBttn("downloadPDF",
-              tagList(icon("download"), " Download PDF"),
+              "Download PDF",
               style = "material-flat", color = "danger", block = TRUE)
           )
         )
