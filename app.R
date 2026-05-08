@@ -17,6 +17,7 @@ library(shinyWidgets)
 library(nlme)
 library(tseries)
 library(KSgeneral)
+library(writexl)
 library(mirai)
 library(promises)
 
@@ -1048,16 +1049,95 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(analysis_results())
-      ts_data <- analysis_results()$ts_data
-      decomp <- analysis_results()$decomposition
-      freq <- frequency(ts_data)
-      seasonal_vals <- as.vector(decomp$seasonal)[1:freq]
+      res <- analysis_results()
+      freq <- frequency(res$ts_data)
+      seasonal_vals <- as.vector(res$decomposition$seasonal)[1:freq]
+      period_names <- if (freq == 12) {
+        c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+      } else {
+        paste0("Q", 1:freq)
+      }
 
-      df <- data.frame(
-        Period = seq_len(freq),
-        Seasonal = round(seasonal_vals, 6)
+      sheets <- list(
+        "Seasonal Indices" = data.frame(Period = period_names, Seasonal = round(seasonal_vals, 6))
       )
-      write.csv(df, file, row.names = FALSE)
+
+      ar <- res$autoreg_results
+      if (!is.null(ar)) {
+        sheets[["Autoregression"]] <- data.frame(
+          Metric = c("R2_autoreg", "Strength", "Amplitude", "AR_order",
+                     "Bartlett_KS_D", "Bartlett_KS_p", "Fisher_Kappa_K", "Fisher_Kappa_p"),
+          Value = c(round(ar$R2_autoreg, 4), ar$strength, round(ar$amplitude, 4),
+                    ar$p_selected, round(ar$Bartlett_KS$statistic, 4),
+                    format(ar$Bartlett_KS$p.value, digits = 4),
+                    round(ar$Fisher_Kappa$statistic, 3),
+                    format(ar$Fisher_Kappa$p.value, digits = 4))
+        )
+      }
+
+      writexl::write_xlsx(sheets, file)
+    }
+  )
+
+  output$downloadReport <- downloadHandler(
+    filename = function() {
+      paste0("seasondx_report_", Sys.Date(), ".html")
+    },
+    content = function(file) {
+      req(analysis_results())
+      res <- analysis_results()
+      freq <- frequency(res$ts_data)
+      seasonal_vals <- as.vector(res$decomposition$seasonal)[1:freq]
+      period_names <- if (freq == 12) {
+        c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+      } else {
+        paste0("Q", 1:freq)
+      }
+
+      rows_seasonal <- paste0(
+        "<tr><td>", period_names, "</td><td>", round(seasonal_vals, 6), "</td></tr>",
+        collapse = ""
+      )
+
+      ar_section <- ""
+      ar <- res$autoreg_results
+      if (!is.null(ar)) {
+        metrics <- c("R² autoregression", "Strength", "Amplitude", "AR order",
+                     "Bartlett KS D", "Bartlett KS p-value",
+                     "Fisher Kappa K", "Fisher Kappa p-value")
+        values <- c(round(ar$R2_autoreg, 4), ar$strength, round(ar$amplitude, 4),
+                    ar$p_selected, round(ar$Bartlett_KS$statistic, 4),
+                    format(ar$Bartlett_KS$p.value, digits = 4),
+                    round(ar$Fisher_Kappa$statistic, 3),
+                    format(ar$Fisher_Kappa$p.value, digits = 4))
+        rows_ar <- paste0("<tr><td>", metrics, "</td><td>", values, "</td></tr>", collapse = "")
+        ar_section <- paste0(
+          "<h2>Autoregression Results</h2>",
+          "<table><tr><th>Metric</th><th>Value</th></tr>", rows_ar, "</table>"
+        )
+      }
+
+      html <- paste0(
+        "<!DOCTYPE html><html><head><meta charset='UTF-8'>",
+        "<title>SeasonDx Report</title>",
+        "<style>",
+        "body{font-family:Arial,sans-serif;margin:40px;color:#333;}",
+        "h1{color:#5c3d99;} h2{color:#5c3d99;margin-top:30px;}",
+        "table{border-collapse:collapse;width:auto;min-width:300px;margin-top:10px;}",
+        "th,td{border:1px solid #ccc;padding:8px 16px;text-align:left;}",
+        "th{background:#f0ebff;}",
+        "p.meta{color:#888;font-size:0.9em;}",
+        "</style></head><body>",
+        "<h1>SeasonDx — Analysis Report</h1>",
+        "<p class='meta'>Generated: ", format(Sys.time(), "%Y-%m-%d %H:%M"), "</p>",
+        "<h2>Seasonal Indices</h2>",
+        "<table><tr><th>Period</th><th>Index</th></tr>", rows_seasonal, "</table>",
+        ar_section,
+        "<hr><p class='meta'>This work is funded by the National Plan of Scientific and Technical Research and Innovation (PID2022-139543OB-I00)</p>",
+        "</body></html>"
+      )
+
+      writeLines(html, file)
     }
   )
 }
