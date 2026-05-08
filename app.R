@@ -18,6 +18,7 @@ library(nlme)
 library(tseries)
 library(KSgeneral)
 library(writexl)
+library(pagedown)
 library(mirai)
 library(promises)
 
@@ -203,7 +204,7 @@ ui <- page_navbar(
         p("Download your analysis results in different formats:"),
 
         layout_columns(
-          col_widths = c(4, 4, 4),
+          col_widths = c(3, 3, 3, 3),
 
           downloadBttn(
             "downloadCSV",
@@ -221,15 +222,86 @@ ui <- page_navbar(
 
           downloadBttn(
             "downloadReport",
-            "Download Report",
+            "Download HTML",
             style = "material-flat",
             color = "warning"
+          ),
+
+          downloadBttn(
+            "downloadPDF",
+            "Download PDF",
+            style = "material-flat",
+            color = "danger"
           )
         )
       )
     )
   )
 )
+
+# Helper: genera el HTML del informe a partir de analysis_results
+build_report_html <- function(res) {
+  freq <- frequency(res$ts_data)
+  seasonal_vals <- as.vector(res$decomposition$seasonal)[1:freq]
+  period_names <- if (freq == 12) {
+    c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+  } else {
+    paste0("Q", 1:freq)
+  }
+
+  rows_seasonal <- paste0(
+    "<tr><td>", period_names, "</td><td>", round(seasonal_vals, 6), "</td></tr>",
+    collapse = ""
+  )
+
+  ar_section <- ""
+  ar <- res$autoreg_results
+  if (!is.null(ar)) {
+    metrics <- c("R² autoregression", "Strength", "Amplitude", "AR order",
+                 "Bartlett KS D", "Bartlett KS p-value",
+                 "Fisher Kappa K", "Fisher Kappa p-value")
+    values <- c(round(ar$R2_autoreg, 4), ar$strength, round(ar$amplitude, 4),
+                ar$p_selected, round(ar$Bartlett_KS$statistic, 4),
+                format(ar$Bartlett_KS$p.value, digits = 4),
+                round(ar$Fisher_Kappa$statistic, 3),
+                format(ar$Fisher_Kappa$p.value, digits = 4))
+    rows_ar <- paste0("<tr><td>", metrics, "</td><td>", values, "</td></tr>", collapse = "")
+    ar_section <- paste0(
+      "<h2>Autoregression Results</h2>",
+      "<table><tr><th>Metric</th><th>Value</th></tr>", rows_ar, "</table>"
+    )
+  }
+
+  paste0(
+    "<!DOCTYPE html><html><head><meta charset='UTF-8'>",
+    "<title>SeasonDx Report</title>",
+    "<style>",
+    "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');",
+    "body{font-family:'Inter',Arial,sans-serif;margin:0;padding:40px 60px;color:#333;background:#fff;}",
+    "header{border-bottom:3px solid #5c3d99;padding-bottom:16px;margin-bottom:30px;}",
+    "header h1{margin:0;color:#5c3d99;font-size:1.8em;letter-spacing:-0.5px;}",
+    "header p{margin:4px 0 0;color:#888;font-size:0.85em;}",
+    "h2{color:#5c3d99;font-size:1.1em;margin-top:32px;margin-bottom:8px;",
+    "  border-left:4px solid #5c3d99;padding-left:10px;}",
+    "table{border-collapse:collapse;width:auto;min-width:320px;margin-top:6px;}",
+    "th,td{border:1px solid #ddd;padding:7px 18px;text-align:left;font-size:0.9em;}",
+    "th{background:#f0ebff;color:#5c3d99;font-weight:600;}",
+    "tr:nth-child(even){background:#fafafa;}",
+    "footer{margin-top:48px;padding-top:12px;border-top:1px solid #eee;",
+    "  font-size:0.78em;color:#aaa;}",
+    "@media print{body{padding:20px 30px;}header h1{font-size:1.4em;}}",
+    "</style></head><body>",
+    "<header>",
+    "<h1>SeasonDx — Analysis Report</h1>",
+    "<p>Generated: ", format(Sys.time(), "%Y-%m-%d %H:%M"), "</p>",
+    "</header>",
+    "<h2>Seasonal Indices</h2>",
+    "<table><tr><th>Period</th><th>Index</th></tr>", rows_seasonal, "</table>",
+    ar_section,
+    "<footer>This work is funded by the National Plan of Scientific and Technical Research and Innovation (PID2022-139543OB-I00)</footer>",
+    "</body></html>"
+  )
+}
 
 # Server
 server <- function(input, output, session) {
@@ -1085,59 +1157,19 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       req(analysis_results())
-      res <- analysis_results()
-      freq <- frequency(res$ts_data)
-      seasonal_vals <- as.vector(res$decomposition$seasonal)[1:freq]
-      period_names <- if (freq == 12) {
-        c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
-      } else {
-        paste0("Q", 1:freq)
-      }
+      writeLines(build_report_html(analysis_results()), file)
+    }
+  )
 
-      rows_seasonal <- paste0(
-        "<tr><td>", period_names, "</td><td>", round(seasonal_vals, 6), "</td></tr>",
-        collapse = ""
-      )
-
-      ar_section <- ""
-      ar <- res$autoreg_results
-      if (!is.null(ar)) {
-        metrics <- c("R² autoregression", "Strength", "Amplitude", "AR order",
-                     "Bartlett KS D", "Bartlett KS p-value",
-                     "Fisher Kappa K", "Fisher Kappa p-value")
-        values <- c(round(ar$R2_autoreg, 4), ar$strength, round(ar$amplitude, 4),
-                    ar$p_selected, round(ar$Bartlett_KS$statistic, 4),
-                    format(ar$Bartlett_KS$p.value, digits = 4),
-                    round(ar$Fisher_Kappa$statistic, 3),
-                    format(ar$Fisher_Kappa$p.value, digits = 4))
-        rows_ar <- paste0("<tr><td>", metrics, "</td><td>", values, "</td></tr>", collapse = "")
-        ar_section <- paste0(
-          "<h2>Autoregression Results</h2>",
-          "<table><tr><th>Metric</th><th>Value</th></tr>", rows_ar, "</table>"
-        )
-      }
-
-      html <- paste0(
-        "<!DOCTYPE html><html><head><meta charset='UTF-8'>",
-        "<title>SeasonDx Report</title>",
-        "<style>",
-        "body{font-family:Arial,sans-serif;margin:40px;color:#333;}",
-        "h1{color:#5c3d99;} h2{color:#5c3d99;margin-top:30px;}",
-        "table{border-collapse:collapse;width:auto;min-width:300px;margin-top:10px;}",
-        "th,td{border:1px solid #ccc;padding:8px 16px;text-align:left;}",
-        "th{background:#f0ebff;}",
-        "p.meta{color:#888;font-size:0.9em;}",
-        "</style></head><body>",
-        "<h1>SeasonDx — Analysis Report</h1>",
-        "<p class='meta'>Generated: ", format(Sys.time(), "%Y-%m-%d %H:%M"), "</p>",
-        "<h2>Seasonal Indices</h2>",
-        "<table><tr><th>Period</th><th>Index</th></tr>", rows_seasonal, "</table>",
-        ar_section,
-        "<hr><p class='meta'>This work is funded by the National Plan of Scientific and Technical Research and Innovation (PID2022-139543OB-I00)</p>",
-        "</body></html>"
-      )
-
-      writeLines(html, file)
+  output$downloadPDF <- downloadHandler(
+    filename = function() {
+      paste0("seasondx_report_", Sys.Date(), ".pdf")
+    },
+    content = function(file) {
+      req(analysis_results())
+      html_tmp <- tempfile(fileext = ".html")
+      writeLines(build_report_html(analysis_results()), html_tmp)
+      pagedown::chrome_print(html_tmp, output = file, wait = 15, timeout = 60)
     }
   )
 }

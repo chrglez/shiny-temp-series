@@ -17,7 +17,7 @@ library(rsconnect)
 cat("🔍 Verificando paquetes requeridos...\n")
 required_packages <- c(
   "shiny", "bslib", "dygraphs", "DT", "plotly", "ggplot2",
-  "forecast", "seastests", "readxl", "writexl", "shinycssloaders",
+  "forecast", "seastests", "readxl", "writexl", "pagedown", "shinycssloaders",
   "shinyWidgets", "nlme", "tseries", "KSgeneral"
 )
 
