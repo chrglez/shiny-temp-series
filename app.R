@@ -198,40 +198,122 @@ ui <- page_navbar(
     "Download",
     icon = icon("download"),
 
-    card(
-      card_header("Export Results"),
-      card_body(
-        p("Download your analysis results in different formats:"),
+    div(class = "p-4",
 
-        layout_columns(
-          col_widths = c(3, 3, 3, 3),
+      p(class = "text-muted mb-4",
+        icon("circle-info"), " ",
+        "All formats include seasonal indices. Excel and PDF also include ",
+        "autoregression metrics when the analysis has completed."
+      ),
 
-          downloadBttn(
-            "downloadCSV",
-            "Download CSV",
-            style = "material-flat",
-            color = "primary"
+      layout_columns(
+        col_widths = c(3, 3, 3, 3),
+
+        # --- CSV ---
+        card(
+          card_header(
+            div(class = "d-flex align-items-center gap-2",
+              div(class = "dl-icon-box", style = "background:#e8f1f8;",
+                icon("table", style = "color:#7BA7C9;")
+              ),
+              div(
+                div(class = "fw-semibold", "CSV"),
+                div(class = "text-muted dl-subtitle", "Comma-separated values")
+              )
+            )
           ),
-
-          downloadBttn(
-            "downloadXLSX",
-            "Download Excel",
-            style = "material-flat",
-            color = "success"
+          card_body(
+            tags$ul(class = "dl-checklist",
+              tags$li(icon("check", style = "color:#8FBF9F;"), " Seasonal indices"),
+              tags$li(icon("check", style = "color:#8FBF9F;"), " Autoregression metrics"),
+              tags$li(icon("check", style = "color:#8FBF9F;"), " Compatible with any spreadsheet")
+            )
           ),
+          card_footer(
+            downloadBttn("downloadCSV",
+              tagList(icon("download"), " Download CSV"),
+              style = "material-flat", color = "primary", block = TRUE)
+          )
+        ),
 
-          downloadBttn(
-            "downloadReport",
-            "Download HTML",
-            style = "material-flat",
-            color = "warning"
+        # --- Excel ---
+        card(
+          card_header(
+            div(class = "d-flex align-items-center gap-2",
+              div(class = "dl-icon-box", style = "background:#e8f5ec;",
+                icon("file-excel", style = "color:#8FBF9F;")
+              ),
+              div(
+                div(class = "fw-semibold", "Excel"),
+                div(class = "text-muted dl-subtitle", "Multi-sheet workbook")
+              )
+            )
           ),
+          card_body(
+            tags$ul(class = "dl-checklist",
+              tags$li(icon("check", style = "color:#8FBF9F;"), " Sheet 1: Seasonal indices"),
+              tags$li(icon("check", style = "color:#8FBF9F;"), " Sheet 2: Autoregression results"),
+              tags$li(icon("check", style = "color:#8FBF9F;"), " Native .xlsx format")
+            )
+          ),
+          card_footer(
+            downloadBttn("downloadXLSX",
+              tagList(icon("download"), " Download Excel"),
+              style = "material-flat", color = "success", block = TRUE)
+          )
+        ),
 
-          downloadBttn(
-            "downloadPDF",
-            "Download PDF",
-            style = "material-flat",
-            color = "danger"
+        # --- HTML ---
+        card(
+          card_header(
+            div(class = "d-flex align-items-center gap-2",
+              div(class = "dl-icon-box", style = "background:#fef9ec;",
+                icon("file-code", style = "color:#d4a017;")
+              ),
+              div(
+                div(class = "fw-semibold", "HTML Report"),
+                div(class = "text-muted dl-subtitle", "Opens in any browser")
+              )
+            )
+          ),
+          card_body(
+            tags$ul(class = "dl-checklist",
+              tags$li(icon("check", style = "color:#8FBF9F;"), " Full styled report"),
+              tags$li(icon("check", style = "color:#8FBF9F;"), " Seasonal indices & metrics"),
+              tags$li(icon("check", style = "color:#8FBF9F;"), " Printable from browser")
+            )
+          ),
+          card_footer(
+            downloadBttn("downloadReport",
+              tagList(icon("download"), " Download HTML"),
+              style = "material-flat", color = "warning", block = TRUE)
+          )
+        ),
+
+        # --- PDF ---
+        card(
+          card_header(
+            div(class = "d-flex align-items-center gap-2",
+              div(class = "dl-icon-box", style = "background:#fdf0f0;",
+                icon("file-pdf", style = "color:#E8A0A0;")
+              ),
+              div(
+                div(class = "fw-semibold", "PDF Report"),
+                div(class = "text-muted dl-subtitle", "Print-ready document")
+              )
+            )
+          ),
+          card_body(
+            tags$ul(class = "dl-checklist",
+              tags$li(icon("check", style = "color:#8FBF9F;"), " Same content as HTML"),
+              tags$li(icon("check", style = "color:#8FBF9F;"), " App visual style"),
+              tags$li(icon("check", style = "color:#8FBF9F;"), " Ready to share or print")
+            )
+          ),
+          card_footer(
+            downloadBttn("downloadPDF",
+              tagList(icon("download"), " Download PDF"),
+              style = "material-flat", color = "danger", block = TRUE)
           )
         )
       )

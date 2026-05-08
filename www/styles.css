@@ -394,6 +394,38 @@ body.shiny-busy-indicator::before {
   object-fit: contain;
 }
 
+/* Download panel */
+.dl-icon-box {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1em;
+  flex-shrink: 0;
+}
+
+.dl-subtitle {
+  font-size: 0.75em;
+  line-height: 1.2;
+}
+
+.dl-checklist {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.875em;
+  color: #4A5568;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dl-checklist li .fa-check {
+  width: 14px;
+}
+
 /* Funding footer */
 .funding-footer {
   text-align: center;
